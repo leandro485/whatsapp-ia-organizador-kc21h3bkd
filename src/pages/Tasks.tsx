@@ -4,10 +4,23 @@ import { Badge } from '@/components/ui/badge'
 import { Calendar, MessageSquare, GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-const COLUMNS: TaskStatus[] = ['Detectada', 'Em Progresso', 'Agendada', 'Concluída']
+const COLUMNS: TaskStatus[] = ['Detectada', 'Em Progresso', 'Concluída']
 
 export default function Tasks() {
-  const { tasks } = useAppStore()
+  const { tasks, updateTaskStatus } = useAppStore()
+
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.dataTransfer.setData('taskId', taskId)
+  }
+
+  const handleDrop = (e: React.DragEvent, status: TaskStatus) => {
+    const taskId = e.dataTransfer.getData('taskId')
+    if (taskId) updateTaskStatus(taskId, status)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -41,10 +54,16 @@ export default function Tasks() {
                 </Badge>
               </div>
 
-              <div className="flex flex-col gap-3 overflow-y-auto pb-2">
+              <div
+                className="flex flex-col gap-3 overflow-y-auto pb-2 min-h-[100px]"
+                onDrop={(e) => handleDrop(e, column)}
+                onDragOver={handleDragOver}
+              >
                 {columnTasks.map((task) => (
                   <Card
                     key={task.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, task.id)}
                     className="cursor-grab hover:shadow-md transition-all border-border/60"
                   >
                     <CardHeader className="p-3 pb-0 flex flex-row items-start justify-between space-y-0">

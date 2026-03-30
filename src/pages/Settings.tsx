@@ -41,12 +41,21 @@ import {
 
 export default function Settings() {
   const { toast } = useToast()
-  const { waConnected, setWaConnected, waPhoneNumber, setWaPhoneNumber, lastSync, setLastSync } =
-    useAppStore()
-  const [categories, setCategories] = useState(['Trabalho', 'Família', 'Financeiro', 'Vendas'])
+  const {
+    waConnected,
+    setWaConnected,
+    waPhoneNumber,
+    setWaPhoneNumber,
+    lastSync,
+    setLastSync,
+    categories,
+    setCategories,
+    aiAggressiveness,
+    setAiAggressiveness,
+    saveSettings,
+  } = useAppStore()
   const [newCategory, setNewCategory] = useState('')
   const [isSyncing, setIsSyncing] = useState(false)
-  const [sliderValue, setSliderValue] = useState([50])
   const [isQRDialogOpen, setIsQRDialogOpen] = useState(false)
   const [isPairing, setIsPairing] = useState(false)
 
@@ -71,30 +80,45 @@ export default function Settings() {
 
   const simulatePairing = () => {
     setIsPairing(true)
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsPairing(false)
       setIsQRDialogOpen(false)
       setWaConnected(true)
       setWaPhoneNumber('+55 11 99999-9999')
       setLastSync(new Date().toLocaleString('pt-BR'))
+      await saveSettings()
       toast({ title: 'WhatsApp Conectado', description: 'Sua conta foi vinculada com sucesso.' })
     }, 2000)
   }
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
     setWaConnected(false)
     setWaPhoneNumber(null)
     setLastSync(null)
+    await saveSettings()
     toast({ title: 'WhatsApp Desconectado', description: 'Sua conta foi desvinculada.' })
   }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
-        <p className="text-sm text-muted-foreground">
-          Gerencie suas preferências de IA, privacidade e integrações.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
+          <p className="text-sm text-muted-foreground">
+            Gerencie suas preferências de IA, privacidade e integrações.
+          </p>
+        </div>
+        <Button
+          onClick={async () => {
+            await saveSettings()
+            toast({
+              title: 'Salvo com sucesso',
+              description: 'Suas configurações foram atualizadas no banco de dados.',
+            })
+          }}
+        >
+          Salvar Alterações
+        </Button>
       </div>
 
       <Tabs defaultValue="general" className="w-full">
@@ -244,8 +268,8 @@ export default function Settings() {
               <div className="space-y-4">
                 <Label className="text-base">Agressividade na Detecção de Prazos</Label>
                 <Slider
-                  value={sliderValue}
-                  onValueChange={setSliderValue}
+                  value={[aiAggressiveness]}
+                  onValueChange={(val) => setAiAggressiveness(val[0])}
                   max={100}
                   step={1}
                   className="w-full"
