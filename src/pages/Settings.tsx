@@ -40,10 +40,12 @@ import {
   QrCode,
   Loader2,
   RefreshCw,
+  MessageSquare,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { getUserSettings, updateUserSettings, createUserSettings } from '@/services/settings'
 import { useRealtime } from '@/hooks/use-realtime'
+import pb from '@/lib/pocketbase/client'
 
 export default function Settings() {
   const { toast } = useToast()
@@ -108,10 +110,15 @@ export default function Settings() {
     !!user,
   )
 
-  const generateQR = useCallback(() => {
-    setQrData(`wa-auth-${user?.id}-${Date.now()}`)
-    setQrExpired(false)
-  }, [user])
+  const generateQR = useCallback(async () => {
+    try {
+      const res = await pb.send<{ qr: string }>('/backend/v1/whatsapp/qr', { method: 'GET' })
+      setQrData(res.qr)
+      setQrExpired(false)
+    } catch (e) {
+      toast({ title: 'Erro', description: 'Falha ao obter QR Code.', variant: 'destructive' })
+    }
+  }, [toast])
 
   useEffect(() => {
     let timer: NodeJS.Timeout
@@ -166,7 +173,7 @@ export default function Settings() {
     if (!settingsId) return
     setIsDisconnecting(true)
     try {
-      await updateUserSettings(settingsId, { whatsapp_connected: false })
+      await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' })
       setLastSync(null)
       toast({ title: 'Desconectado', description: 'WhatsApp foi desvinculado.' })
     } catch (err) {
@@ -261,9 +268,39 @@ export default function Settings() {
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2 w-full sm:w-auto">
+                <div className="flex gap-2 w-full sm:w-auto flex-wrap justify-end">
                   {waConnected ? (
                     <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await pb.send('/backend/v1/webhook/whatsapp', {
+                              method: 'POST',
+                              body: {
+                                userId: user?.id,
+                                contactName: 'Cliente ' + Math.floor(Math.random() * 100),
+                                message: 'Preciso que você me envie o relatório amanhã!',
+                              },
+                            })
+                            toast({
+                              title: 'Mensagem Simulada',
+                              description: 'Webhook disparado com sucesso.',
+                            })
+                          } catch (e) {
+                            toast({
+                              title: 'Erro',
+                              description: 'Falha no webhook.',
+                              variant: 'destructive',
+                            })
+                          }
+                        }}
+                        className="flex-1 sm:flex-none"
+                        title="Simular recebimento de mensagem via Webhook"
+                      >
+                        <MessageSquare className="w-4 h-4 mr-2" /> Simular Webhook
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"

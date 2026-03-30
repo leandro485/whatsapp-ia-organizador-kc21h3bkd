@@ -1,8 +1,18 @@
 import ChatList from '@/components/conversations/ChatList'
 import ChatDetail from '@/components/conversations/ChatDetail'
 import AiSidebar from '@/components/conversations/AiSidebar'
+import { useRealtime } from '@/hooks/use-realtime'
+import { useAppStore } from '@/stores/main'
 
 export default function Conversations() {
+  const fetchChats = useAppStore((state: any) => state.fetchChats)
+
+  useRealtime('chats', () => {
+    if (typeof fetchChats === 'function') {
+      fetchChats()
+    }
+  })
+
   return (
     <div className="h-full flex flex-col -mx-4 -my-6 md:-mx-6 md:my-0">
       <div className="flex flex-1 overflow-hidden h-full">

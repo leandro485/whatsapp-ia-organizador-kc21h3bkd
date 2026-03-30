@@ -1,21 +1,64 @@
-import { useAppStore, TaskStatus } from '@/stores/main'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Calendar, MessageSquare, GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { getTasks, updateTaskStatus as updatePbTaskStatus } from '@/services/tasks'
+import { useRealtime } from '@/hooks/use-realtime'
 
+type TaskStatus = 'Detectada' | 'Em Progresso' | 'Concluída'
 const COLUMNS: TaskStatus[] = ['Detectada', 'Em Progresso', 'Concluída']
 
 export default function Tasks() {
-  const { tasks, updateTaskStatus } = useAppStore()
+  const [tasks, setTasks] = useState<any[]>([])
+
+  const loadTasks = useCallback(async () => {
+    try {
+      const pbTasks = await getTasks()
+      setTasks(
+        pbTasks.map((t) => ({
+          id: t.id,
+          title: t.title,
+          snippet: t.description || 'Sem descrição',
+          contactName: t.expand?.chat?.name || 'Sistema',
+          deadline: t.deadline ? new Date(t.deadline).toLocaleDateString() : undefined,
+          status:
+            t.status === 'detected'
+              ? 'Detectada'
+              : t.status === 'in_progress'
+                ? 'Em Progresso'
+                : 'Concluída',
+        })),
+      )
+    } catch (err) {
+      console.error('Failed to load tasks', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadTasks()
+  }, [loadTasks])
+
+  useRealtime('tasks', () => {
+    loadTasks()
+  })
 
   const handleDragStart = (e: React.DragEvent, taskId: string) => {
     e.dataTransfer.setData('taskId', taskId)
   }
 
-  const handleDrop = (e: React.DragEvent, status: TaskStatus) => {
+  const handleDrop = async (e: React.DragEvent, status: TaskStatus) => {
     const taskId = e.dataTransfer.getData('taskId')
-    if (taskId) updateTaskStatus(taskId, status)
+    if (taskId) {
+      const pbStatus =
+        status === 'Detectada'
+          ? 'detected'
+          : status === 'Em Progresso'
+            ? 'in_progress'
+            : 'completed'
+      await updatePbTaskStatus(taskId, pbStatus)
+      loadTasks()
+    }
   }
 
   const handleDragOver = (e: React.DragEvent) => {
