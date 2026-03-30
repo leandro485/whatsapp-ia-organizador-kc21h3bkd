@@ -1,15 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Slider } from '@/components/ui/slider'
@@ -22,8 +15,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
-import { useAppStore } from '@/stores/main'
 import {
   Smartphone,
   RefreshCcw,
@@ -37,27 +39,94 @@ import {
   X,
   QrCode,
   Loader2,
+  RefreshCw,
 } from 'lucide-react'
+import { useAuth } from '@/hooks/use-auth'
+import { getUserSettings, updateUserSettings, createUserSettings } from '@/services/settings'
+import { useRealtime } from '@/hooks/use-realtime'
 
 export default function Settings() {
   const { toast } = useToast()
-  const {
-    waConnected,
-    setWaConnected,
-    waPhoneNumber,
-    setWaPhoneNumber,
-    lastSync,
-    setLastSync,
-    categories,
-    setCategories,
-    aiAggressiveness,
-    setAiAggressiveness,
-    saveSettings,
-  } = useAppStore()
+  const { user } = useAuth()
+
+  const [settingsId, setSettingsId] = useState<string | null>(null)
+  const [waConnected, setWaConnected] = useState(false)
+  const [waPhoneNumber] = useState<string | null>('+55 11 99999-9999')
+  const [lastSync, setLastSync] = useState<string | null>(null)
+  const [categories, setCategories] = useState<string[]>([])
+  const [aiAggressiveness, setAiAggressiveness] = useState(50)
+
   const [newCategory, setNewCategory] = useState('')
   const [isSyncing, setIsSyncing] = useState(false)
   const [isQRDialogOpen, setIsQRDialogOpen] = useState(false)
   const [isPairing, setIsPairing] = useState(false)
+
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
+  const [isDisconnecting, setIsDisconnecting] = useState(false)
+
+  const [qrData, setQrData] = useState('')
+  const [qrExpired, setQrExpired] = useState(false)
+
+  const loadSettings = useCallback(async () => {
+    if (!user) return
+    try {
+      let settings = await getUserSettings(user.id)
+      if (!settings) {
+        settings = await createUserSettings({
+          user: user.id,
+          whatsapp_connected: false,
+          ai_aggressiveness: 50,
+          categories: ['Geral', 'Trabalho', 'Pessoal'],
+        })
+      }
+      setSettingsId(settings.id)
+      setWaConnected(settings.whatsapp_connected || false)
+      setAiAggressiveness(settings.ai_aggressiveness ?? 50)
+      setCategories(settings.categories || ['Geral', 'Trabalho', 'Pessoal'])
+    } catch (error) {
+      console.error('Failed to load settings', error)
+    }
+  }, [user])
+
+  useEffect(() => {
+    loadSettings()
+  }, [loadSettings])
+
+  useRealtime(
+    'user_settings',
+    (e) => {
+      if (user && e.record.user === user.id) {
+        setWaConnected(e.record.whatsapp_connected || false)
+        setAiAggressiveness(e.record.ai_aggressiveness ?? 50)
+        setCategories(e.record.categories || [])
+        if (e.record.whatsapp_connected && isQRDialogOpen) {
+          setIsQRDialogOpen(false)
+          toast({ title: 'WhatsApp Conectado', description: 'Conta vinculada com sucesso.' })
+        }
+      }
+    },
+    !!user,
+  )
+
+  const generateQR = useCallback(() => {
+    setQrData(`wa-auth-${user?.id}-${Date.now()}`)
+    setQrExpired(false)
+  }, [user])
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout
+    if (isQRDialogOpen && !qrExpired && !waConnected && !isPairing) {
+      timer = setTimeout(() => {
+        setQrExpired(true)
+      }, 30000)
+    }
+    return () => clearTimeout(timer)
+  }, [isQRDialogOpen, qrExpired, waConnected, isPairing])
+
+  const handleConnectClick = () => {
+    generateQR()
+    setIsQRDialogOpen(true)
+  }
 
   const handleAddCategory = () => {
     if (newCategory.trim() && !categories.includes(newCategory.trim())) {
@@ -73,30 +142,55 @@ export default function Settings() {
       setLastSync(new Date().toLocaleString('pt-BR'))
       toast({
         title: 'Sincronização concluída',
-        description: 'Suas mensagens foram atualizadas com o WhatsApp.',
+        description: 'Suas mensagens foram atualizadas.',
       })
     }, 2000)
   }
 
-  const simulatePairing = () => {
+  const simulatePairing = async () => {
+    if (!settingsId) return
     setIsPairing(true)
     setTimeout(async () => {
-      setIsPairing(false)
-      setIsQRDialogOpen(false)
-      setWaConnected(true)
-      setWaPhoneNumber('+55 11 99999-9999')
-      setLastSync(new Date().toLocaleString('pt-BR'))
-      await saveSettings()
-      toast({ title: 'WhatsApp Conectado', description: 'Sua conta foi vinculada com sucesso.' })
-    }, 2000)
+      try {
+        await updateUserSettings(settingsId, { whatsapp_connected: true })
+        setLastSync(new Date().toLocaleString('pt-BR'))
+      } catch (err) {
+        toast({ title: 'Erro', description: 'Falha ao vincular.', variant: 'destructive' })
+      } finally {
+        setIsPairing(false)
+      }
+    }, 1500)
   }
 
-  const handleDisconnect = async () => {
-    setWaConnected(false)
-    setWaPhoneNumber(null)
-    setLastSync(null)
-    await saveSettings()
-    toast({ title: 'WhatsApp Desconectado', description: 'Sua conta foi desvinculada.' })
+  const confirmDisconnect = async () => {
+    if (!settingsId) return
+    setIsDisconnecting(true)
+    try {
+      await updateUserSettings(settingsId, { whatsapp_connected: false })
+      setLastSync(null)
+      toast({ title: 'Desconectado', description: 'WhatsApp foi desvinculado.' })
+    } catch (err) {
+      toast({ title: 'Erro', description: 'Falha ao desvincular.', variant: 'destructive' })
+    } finally {
+      setIsDisconnecting(false)
+      setShowDisconnectConfirm(false)
+    }
+  }
+
+  const handleSaveSettings = async () => {
+    if (!settingsId) return
+    try {
+      await updateUserSettings(settingsId, {
+        ai_aggressiveness: aiAggressiveness,
+        categories,
+      })
+      toast({
+        title: 'Salvo com sucesso',
+        description: 'Suas configurações foram atualizadas.',
+      })
+    } catch (err) {
+      toast({ title: 'Erro', description: 'Falha ao salvar.', variant: 'destructive' })
+    }
   }
 
   return (
@@ -105,20 +199,10 @@ export default function Settings() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
           <p className="text-sm text-muted-foreground">
-            Gerencie suas preferências de IA, privacidade e integrações.
+            Gerencie suas preferências de IA e integrações.
           </p>
         </div>
-        <Button
-          onClick={async () => {
-            await saveSettings()
-            toast({
-              title: 'Salvo com sucesso',
-              description: 'Suas configurações foram atualizadas no banco de dados.',
-            })
-          }}
-        >
-          Salvar Alterações
-        </Button>
+        <Button onClick={handleSaveSettings}>Salvar Alterações</Button>
       </div>
 
       <Tabs defaultValue="general" className="w-full">
@@ -143,9 +227,7 @@ export default function Settings() {
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Smartphone className="w-5 h-5 text-primary" /> Conexão WhatsApp
               </CardTitle>
-              <CardDescription>
-                Gerencie a conexão da sua conta do WhatsApp com o Hub Inteligente.
-              </CardDescription>
+              <CardDescription>Gerencie a conexão da sua conta.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg bg-card gap-4">
@@ -172,12 +254,10 @@ export default function Settings() {
                     {waConnected ? (
                       <div className="text-sm text-muted-foreground">
                         <p>Número: {waPhoneNumber}</p>
-                        <p>Última sincronização: {lastSync}</p>
+                        {lastSync && <p>Sincronizado: {lastSync}</p>}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Nenhuma conta vinculada no momento.
-                      </p>
+                      <p className="text-sm text-muted-foreground">Nenhuma conta vinculada.</p>
                     )}
                   </div>
                 </div>
@@ -197,7 +277,7 @@ export default function Settings() {
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={handleDisconnect}
+                        onClick={() => setShowDisconnectConfirm(true)}
                         className="flex-1 sm:flex-none"
                       >
                         Desconectar
@@ -207,7 +287,7 @@ export default function Settings() {
                     <Button
                       variant="default"
                       size="sm"
-                      onClick={() => setIsQRDialogOpen(true)}
+                      onClick={handleConnectClick}
                       className="flex-1 sm:flex-none"
                     >
                       <QrCode className="w-4 h-4 mr-2" /> Conectar
@@ -221,7 +301,7 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Settings2 className="w-5 h-5 text-primary" /> Categorias e Workspaces
+                <Settings2 className="w-5 h-5 text-primary" /> Categorias
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -250,7 +330,7 @@ export default function Settings() {
                   onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
                 />
                 <Button variant="secondary" onClick={handleAddCategory}>
-                  <Plus className="w-4 h-4 mr-2" /> Adicionar
+                  <Plus className="w-4 h-4 mr-2" /> Add
                 </Button>
               </div>
             </CardContent>
@@ -288,7 +368,7 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Shield className="w-5 h-5 text-primary" /> Privacidade e Segurança
+                <Shield className="w-5 h-5 text-primary" /> Privacidade
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -304,7 +384,7 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Bell className="w-5 h-5 text-primary" /> Preferências de Alerta
+                <Bell className="w-5 h-5 text-primary" /> Alertas
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -322,19 +402,26 @@ export default function Settings() {
           <DialogHeader>
             <DialogTitle>Conectar WhatsApp</DialogTitle>
             <DialogDescription>
-              Escaneie o código QR abaixo para vincular sua conta.
+              Escaneie o código QR abaixo com seu WhatsApp para vincular a conta.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center p-6 space-y-6">
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-border">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-border relative min-h-[232px] min-w-[232px] flex items-center justify-center">
               {isPairing ? (
-                <div className="w-48 h-48 flex flex-col items-center justify-center space-y-4 text-muted-foreground">
+                <div className="flex flex-col items-center justify-center space-y-4 text-muted-foreground">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <p className="text-sm font-medium">Conectando...</p>
+                  <p className="text-sm font-medium">Aguardando scan...</p>
+                </div>
+              ) : qrExpired ? (
+                <div className="flex flex-col items-center justify-center space-y-4 text-muted-foreground text-center">
+                  <p className="text-sm font-medium text-destructive">Código QR Expirado</p>
+                  <Button variant="outline" size="sm" onClick={generateQR}>
+                    <RefreshCw className="w-4 h-4 mr-2" /> Atualizar Código
+                  </Button>
                 </div>
               ) : (
                 <img
-                  src="https://img.usecurling.com/p/200/200?q=qrcode"
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qrData)}`}
                   alt="QR Code"
                   className="w-48 h-48 object-cover rounded"
                 />
@@ -345,19 +432,46 @@ export default function Settings() {
               <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
                 <li>Abra o WhatsApp no seu celular</li>
                 <li>Toque em Configurações &gt; Aparelhos Conectados</li>
+                <li>Toque em "Conectar um aparelho"</li>
                 <li>Aponte a câmera para este código</li>
               </ol>
             </div>
           </div>
           <div className="flex justify-end pt-4 border-t">
-            {!isPairing && (
-              <Button onClick={simulatePairing} className="w-full sm:w-auto">
-                Simular Conexão
+            {!isPairing && !qrExpired && (
+              <Button onClick={simulatePairing} variant="secondary" className="w-full sm:w-auto">
+                Simular Scan no Celular
               </Button>
             )}
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showDisconnectConfirm} onOpenChange={setShowDisconnectConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desconectar WhatsApp?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja desvincular sua conta do WhatsApp? Suas mensagens deixarão de
+              ser sincronizadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDisconnecting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                confirmDisconnect()
+              }}
+              disabled={isDisconnecting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDisconnecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Desconectar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
