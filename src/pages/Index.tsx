@@ -1,34 +1,42 @@
-import SummaryCard from '@/components/dashboard/SummaryCard'
-import UrgencyGrid from '@/components/dashboard/UrgencyGrid'
-import ActivityChart from '@/components/dashboard/ActivityChart'
+import MetricsOverview from '@/components/dashboard/MetricsOverview'
+import VolumeAnalytics from '@/components/dashboard/VolumeAnalytics'
+import CategoryDistribution from '@/components/dashboard/CategoryDistribution'
+import RecentActivity from '@/components/dashboard/RecentActivity'
 import PendingTasks from '@/components/dashboard/PendingTasks'
+import UrgencyGrid from '@/components/dashboard/UrgencyGrid'
 
 export default function Index() {
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-6 h-full pb-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Visão Geral
+            Painel Analytics
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Seu painel de controle e inteligência para WhatsApp.
+            Visualize sua produtividade e o volume de mensagens gerenciados pela IA.
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-min">
-        <div className="md:col-span-2 flex flex-col gap-6">
-          <SummaryCard />
-          <ActivityChart />
+      <MetricsOverview />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <VolumeAnalytics />
         </div>
-        <div className="flex flex-col gap-6 h-full">
-          <div className="flex-1">
-            <UrgencyGrid />
-          </div>
-          <div className="flex-1">
-            <PendingTasks />
-          </div>
+        <div>
+          <CategoryDistribution />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <RecentActivity />
+        </div>
+        <div className="flex flex-col gap-6">
+          <UrgencyGrid />
+          <PendingTasks />
         </div>
       </div>
     </div>
