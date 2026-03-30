@@ -18,7 +18,7 @@ import { useAppStore, ChatCategory } from '@/stores/main'
 export default function AppSidebar() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { chats, tasks, categoryFilter, setCategoryFilter } = useAppStore()
+  const { chats, tasks, categoryFilter, setCategoryFilter, waConnected } = useAppStore()
 
   const unreadChats = chats.reduce((acc, chat) => acc + chat.unread, 0)
   const pendingTasks = tasks.filter((t) => t.status === 'Detectada').length
@@ -103,10 +103,16 @@ export default function AppSidebar() {
       <SidebarFooter className="border-t p-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <div className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+            {waConnected && (
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+            )}
+            <span
+              className={`relative inline-flex rounded-full h-3 w-3 ${waConnected ? 'bg-green-500' : 'bg-red-500'}`}
+            ></span>
           </div>
-          <span className="font-medium text-foreground">Sincronização Ativa</span>
+          <span className="font-medium text-foreground">
+            {waConnected ? 'WhatsApp Conectado' : 'Desconectado'}
+          </span>
         </div>
       </SidebarFooter>
     </Sidebar>

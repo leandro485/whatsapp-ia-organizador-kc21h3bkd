@@ -15,7 +15,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Slider } from '@/components/ui/slider'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
+import { useAppStore } from '@/stores/main'
 import {
   Smartphone,
   RefreshCcw,
@@ -27,15 +35,20 @@ import {
   CheckCircle2,
   XCircle,
   X,
+  QrCode,
+  Loader2,
 } from 'lucide-react'
 
 export default function Settings() {
   const { toast } = useToast()
+  const { waConnected, setWaConnected, waPhoneNumber, setWaPhoneNumber, lastSync, setLastSync } =
+    useAppStore()
   const [categories, setCategories] = useState(['Trabalho', 'Família', 'Financeiro', 'Vendas'])
   const [newCategory, setNewCategory] = useState('')
-  const [waConnected, setWaConnected] = useState(true)
   const [isSyncing, setIsSyncing] = useState(false)
   const [sliderValue, setSliderValue] = useState([50])
+  const [isQRDialogOpen, setIsQRDialogOpen] = useState(false)
+  const [isPairing, setIsPairing] = useState(false)
 
   const handleAddCategory = () => {
     if (newCategory.trim() && !categories.includes(newCategory.trim())) {
@@ -44,21 +57,11 @@ export default function Settings() {
     }
   }
 
-  const handleRemoveCategory = (cat: string) => {
-    setCategories(categories.filter((c) => c !== cat))
-  }
-
-  const handleSave = () => {
-    toast({
-      title: 'Configurações salvas',
-      description: 'Suas preferências foram atualizadas com sucesso.',
-    })
-  }
-
   const handleSync = () => {
     setIsSyncing(true)
     setTimeout(() => {
       setIsSyncing(false)
+      setLastSync(new Date().toLocaleString('pt-BR'))
       toast({
         title: 'Sincronização concluída',
         description: 'Suas mensagens foram atualizadas com o WhatsApp.',
@@ -66,10 +69,23 @@ export default function Settings() {
     }, 2000)
   }
 
-  const getAgressivenessLabel = (val: number) => {
-    if (val < 30) return 'Relaxada'
-    if (val > 70) return 'Rigorosa'
-    return 'Balanceada'
+  const simulatePairing = () => {
+    setIsPairing(true)
+    setTimeout(() => {
+      setIsPairing(false)
+      setIsQRDialogOpen(false)
+      setWaConnected(true)
+      setWaPhoneNumber('+55 11 99999-9999')
+      setLastSync(new Date().toLocaleString('pt-BR'))
+      toast({ title: 'WhatsApp Conectado', description: 'Sua conta foi vinculada com sucesso.' })
+    }, 2000)
+  }
+
+  const handleDisconnect = () => {
+    setWaConnected(false)
+    setWaPhoneNumber(null)
+    setLastSync(null)
+    toast({ title: 'WhatsApp Desconectado', description: 'Sua conta foi desvinculada.' })
   }
 
   return (
@@ -101,8 +117,7 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Smartphone className="w-5 h-5 text-primary" />
-                Integração WhatsApp
+                <Smartphone className="w-5 h-5 text-primary" /> Conexão WhatsApp
               </CardTitle>
               <CardDescription>
                 Gerencie a conexão da sua conta do WhatsApp com o Hub Inteligente.
@@ -121,31 +136,59 @@ export default function Settings() {
                     )}
                   </div>
                   <div>
-                    <p className="font-medium">{waConnected ? 'Conectado' : 'Desconectado'}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {waConnected ? '+55 11 99999-9999' : 'Nenhuma conta vinculada'}
-                    </p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-medium">Status:</p>
+                      <Badge
+                        variant={waConnected ? 'default' : 'destructive'}
+                        className={waConnected ? 'bg-green-500 hover:bg-green-600' : ''}
+                      >
+                        {waConnected ? 'Conectado' : 'Desconectado'}
+                      </Badge>
+                    </div>
+                    {waConnected ? (
+                      <div className="text-sm text-muted-foreground">
+                        <p>Número: {waPhoneNumber}</p>
+                        <p>Última sincronização: {lastSync}</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhuma conta vinculada no momento.
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSync}
-                    disabled={!waConnected || isSyncing}
-                    className="flex-1 sm:flex-none"
-                  >
-                    <RefreshCcw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
-                    Sincronizar
-                  </Button>
-                  <Button
-                    variant={waConnected ? 'destructive' : 'default'}
-                    size="sm"
-                    onClick={() => setWaConnected(!waConnected)}
-                    className="flex-1 sm:flex-none"
-                  >
-                    {waConnected ? 'Desconectar' : 'Conectar'}
-                  </Button>
+                  {waConnected ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSync}
+                        disabled={isSyncing}
+                        className="flex-1 sm:flex-none"
+                      >
+                        <RefreshCcw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />{' '}
+                        Sincronizar
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleDisconnect}
+                        className="flex-1 sm:flex-none"
+                      >
+                        Desconectar
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => setIsQRDialogOpen(true)}
+                      className="flex-1 sm:flex-none"
+                    >
+                      <QrCode className="w-4 h-4 mr-2" /> Conectar
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -154,12 +197,8 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Settings2 className="w-5 h-5 text-primary" />
-                Categorias e Workspaces
+                <Settings2 className="w-5 h-5 text-primary" /> Categorias e Workspaces
               </CardTitle>
-              <CardDescription>
-                Personalize as etiquetas usadas para agrupar suas conversas automaticamente.
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
@@ -171,8 +210,8 @@ export default function Settings() {
                   >
                     {cat}
                     <button
-                      onClick={() => handleRemoveCategory(cat)}
-                      className="hover:text-destructive transition-colors focus:outline-none"
+                      onClick={() => setCategories(categories.filter((c) => c !== cat))}
+                      className="hover:text-destructive"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -187,8 +226,7 @@ export default function Settings() {
                   onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
                 />
                 <Button variant="secondary" onClick={handleAddCategory}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar
+                  <Plus className="w-4 h-4 mr-2" /> Adicionar
                 </Button>
               </div>
             </CardContent>
@@ -199,71 +237,23 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Bot className="w-5 h-5 text-primary" />
-                Comportamento da IA
+                <Bot className="w-5 h-5 text-primary" /> Comportamento da IA
               </CardTitle>
-              <CardDescription>
-                Configure como o assistente interpreta e reage às suas mensagens.
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Agressividade na Detecção de Prazos</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Define quão sensível a IA será ao criar tarefas a partir de conversas.
-                    </p>
-                  </div>
-                  <span className="text-sm font-medium px-2 py-1 bg-primary/10 text-primary rounded-md hidden sm:inline-block">
-                    {getAgressivenessLabel(sliderValue[0])}
-                  </span>
-                </div>
-                <div className="pt-4 pb-2">
-                  <Slider
-                    value={sliderValue}
-                    onValueChange={setSliderValue}
-                    max={100}
-                    step={1}
-                    className="w-full"
-                  />
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Relaxada (Apenas explícitos)</span>
-                  <span>Rigorosa (Qualquer indício)</span>
-                </div>
+                <Label className="text-base">Agressividade na Detecção de Prazos</Label>
+                <Slider
+                  value={sliderValue}
+                  onValueChange={setSliderValue}
+                  max={100}
+                  step={1}
+                  className="w-full"
+                />
               </div>
-
               <Separator />
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-0.5">
-                  <Label className="text-base">Tom de Voz (Respostas Rápidas)</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Define o estilo de linguagem nas sugestões da IA.
-                  </p>
-                </div>
-                <Select defaultValue="professional">
-                  <SelectTrigger className="w-full sm:w-[220px]">
-                    <SelectValue placeholder="Selecione o tom..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="professional">Profissional</SelectItem>
-                    <SelectItem value="casual">Casual & Amigável</SelectItem>
-                    <SelectItem value="objective">Direto ao Ponto</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Separator />
-
               <div className="flex items-center justify-between">
-                <div className="space-y-0.5 pr-4">
-                  <Label className="text-base">Geração de Tarefas Automática</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Criar tarefas automaticamente no painel quando pedidos forem detectados.
-                  </p>
-                </div>
+                <Label className="text-base">Geração de Tarefas Automática</Label>
                 <Switch defaultChecked />
               </div>
             </CardContent>
@@ -274,61 +264,13 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Shield className="w-5 h-5 text-primary" />
-                Privacidade e Segurança
+                <Shield className="w-5 h-5 text-primary" /> Privacidade e Segurança
               </CardTitle>
-              <CardDescription>
-                Controles de proteção de dados e retenção de informações no sistema.
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
-                <div className="space-y-0.5 pr-4">
-                  <Label className="text-base">Mascaramento de Dados Sensíveis</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Oculta CPFs, senhas e valores financeiros nos resumos da IA.
-                  </p>
-                </div>
+                <Label className="text-base">Mascaramento de Dados Sensíveis</Label>
                 <Switch defaultChecked />
-              </div>
-
-              <Separator />
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-0.5">
-                  <Label className="text-base">Retenção de Mensagens</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Tempo que o histórico é mantido para dar contexto à IA.
-                  </p>
-                </div>
-                <Select defaultValue="30">
-                  <SelectTrigger className="w-full sm:w-[220px]">
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="7">7 dias</SelectItem>
-                    <SelectItem value="30">30 dias</SelectItem>
-                    <SelectItem value="90">90 dias</SelectItem>
-                    <SelectItem value="forever">Indeterminado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Separator />
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5 pr-4">
-                  <Label className="text-base">Criptografia Ponta-a-Ponta</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Status da comunicação com os provedores LLM.
-                  </p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900"
-                >
-                  Ativa
-                </Badge>
               </div>
             </CardContent>
           </Card>
@@ -338,43 +280,12 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Bell className="w-5 h-5 text-primary" />
-                Preferências de Alerta
+                <Bell className="w-5 h-5 text-primary" /> Preferências de Alerta
               </CardTitle>
-              <CardDescription>Configure como e quando você deseja ser notificado.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
-                <div className="space-y-0.5 pr-4">
-                  <Label className="text-base">Resumo Diário (Briefing)</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Receber um briefing consolidado via notificação todas as manhãs.
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
-              <Separator />
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5 pr-4">
-                  <Label className="text-base">Alertas de Urgência Extremas</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notificações imediatas quando a IA detectar um assunto crítico.
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
-              <Separator />
-
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5 pr-4">
-                  <Label className="text-base">Descoberta de Novas Tarefas</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Avisar silenciosamente no painel quando uma nova tarefa for criada.
-                  </p>
-                </div>
+                <Label className="text-base">Resumo Diário (Briefing)</Label>
                 <Switch defaultChecked />
               </div>
             </CardContent>
@@ -382,14 +293,47 @@ export default function Settings() {
         </TabsContent>
       </Tabs>
 
-      <div className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t mt-8">
-        <Button variant="outline" className="w-full sm:w-auto">
-          Restaurar Padrões
-        </Button>
-        <Button onClick={handleSave} className="w-full sm:w-auto">
-          Salvar Alterações
-        </Button>
-      </div>
+      <Dialog open={isQRDialogOpen} onOpenChange={setIsQRDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Conectar WhatsApp</DialogTitle>
+            <DialogDescription>
+              Escaneie o código QR abaixo para vincular sua conta.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center p-6 space-y-6">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-border">
+              {isPairing ? (
+                <div className="w-48 h-48 flex flex-col items-center justify-center space-y-4 text-muted-foreground">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <p className="text-sm font-medium">Conectando...</p>
+                </div>
+              ) : (
+                <img
+                  src="https://img.usecurling.com/p/200/200?q=qrcode"
+                  alt="QR Code"
+                  className="w-48 h-48 object-cover rounded"
+                />
+              )}
+            </div>
+            <div className="space-y-3 w-full max-w-sm">
+              <h4 className="font-semibold text-sm">Instruções:</h4>
+              <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                <li>Abra o WhatsApp no seu celular</li>
+                <li>Toque em Configurações &gt; Aparelhos Conectados</li>
+                <li>Aponte a câmera para este código</li>
+              </ol>
+            </div>
+          </div>
+          <div className="flex justify-end pt-4 border-t">
+            {!isPairing && (
+              <Button onClick={simulatePairing} className="w-full sm:w-auto">
+                Simular Conexão
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

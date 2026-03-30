@@ -144,6 +144,12 @@ interface AppState {
   setGlobalSearch: (query: string) => void
   categoryFilter: ChatCategory | null
   setCategoryFilter: (category: ChatCategory | null) => void
+  waConnected: boolean
+  setWaConnected: (status: boolean) => void
+  waPhoneNumber: string | null
+  setWaPhoneNumber: (number: string | null) => void
+  lastSync: string | null
+  setLastSync: (time: string | null) => void
 }
 
 export const AppContext = createContext<AppState | null>(null)
@@ -154,6 +160,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [activeChatId, setActiveChatId] = useState<string | null>(MOCK_CHATS[0].id)
   const [globalSearch, setGlobalSearch] = useState<string>('')
   const [categoryFilter, setCategoryFilter] = useState<ChatCategory | null>(null)
+  const [waConnected, setWaConnected] = useState<boolean>(false)
+  const [waPhoneNumber, setWaPhoneNumber] = useState<string | null>(null)
+  const [lastSync, setLastSync] = useState<string | null>(null)
 
   const updateTaskStatus = (id: string, status: TaskStatus) => {
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status } : t)))
@@ -176,6 +185,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setGlobalSearch,
         categoryFilter,
         setCategoryFilter,
+        waConnected,
+        setWaConnected,
+        waPhoneNumber,
+        setWaPhoneNumber,
+        lastSync,
+        setLastSync,
       }}
     >
       {children}
