@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Slider } from '@/components/ui/slider'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import {
   Dialog,
   DialogContent,
@@ -47,6 +48,8 @@ import { getUserSettings, updateUserSettings, createUserSettings } from '@/servi
 import { useRealtime } from '@/hooks/use-realtime'
 import pb from '@/lib/pocketbase/client'
 
+const QR_LIFESPAN = 45
+
 export default function Settings() {
   const { toast } = useToast()
   const { user } = useAuth()
@@ -71,6 +74,7 @@ export default function Settings() {
   const [isLoadingQR, setIsLoadingQR] = useState(false)
   const [qrError, setQrError] = useState<string | null>(null)
   const [qrSuccess, setQrSuccess] = useState(false)
+  const [qrTimeLeft, setQrTimeLeft] = useState(0)
 
   const loadSettings = useCallback(async () => {
     if (!user) return
@@ -128,6 +132,7 @@ export default function Settings() {
     setQrError(null)
     setQrExpired(false)
     setQrSuccess(false)
+    setQrTimeLeft(QR_LIFESPAN)
     try {
       const res = await pb.send<{ qr: string }>('/backend/v1/whatsapp/qr', { method: 'GET' })
       if (res && res.qr) {
@@ -136,7 +141,7 @@ export default function Settings() {
         throw new Error('Invalid QR response')
       }
     } catch (e) {
-      setQrError('Código QR inválido ou falha de conexão.')
+      setQrError('Connection handshake failed. Please try generating a new QR code.')
       toast({ title: 'Erro', description: 'Falha ao obter QR Code.', variant: 'destructive' })
     } finally {
       setIsLoadingQR(false)
@@ -145,13 +150,15 @@ export default function Settings() {
 
   useEffect(() => {
     let timer: NodeJS.Timeout
-    if (isQRDialogOpen && !qrExpired && !isLoadingQR && !qrError && !qrSuccess && qrData) {
+    if (isQRDialogOpen && !isLoadingQR && !qrError && !qrSuccess && qrData && qrTimeLeft > 0) {
       timer = setTimeout(() => {
-        setQrExpired(true)
-      }, 45000)
+        setQrTimeLeft((prev) => prev - 1)
+      }, 1000)
+    } else if (qrTimeLeft === 0 && qrData && !qrSuccess && !qrError && isQRDialogOpen) {
+      setQrExpired(true)
     }
     return () => clearTimeout(timer)
-  }, [isQRDialogOpen, qrExpired, isLoadingQR, qrError, qrSuccess, qrData])
+  }, [isQRDialogOpen, isLoadingQR, qrError, qrSuccess, qrData, qrTimeLeft])
 
   const handleCancelPairing = async () => {
     if (waConnected || qrSuccess) {
@@ -201,7 +208,6 @@ export default function Settings() {
         setLastSync(new Date().toLocaleString('pt-BR'))
       } catch (err) {
         toast({ title: 'Erro', description: 'Falha ao vincular.', variant: 'destructive' })
-      } finally {
         setIsPairing(false)
       }
     }, 1500)
@@ -212,6 +218,7 @@ export default function Settings() {
     setIsDisconnecting(true)
     try {
       await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' })
+      await updateUserSettings(settingsId, { whatsapp_connected: false })
       setLastSync(null)
       toast({ title: 'Desconectado', description: 'WhatsApp foi desvinculado.' })
     } catch (err) {
@@ -487,7 +494,7 @@ export default function Settings() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center p-6 space-y-6">
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-border relative min-h-[256px] min-w-[256px] flex items-center justify-center">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-border relative min-h-[256px] min-w-[256px] flex flex-col items-center justify-center">
               {qrSuccess ? (
                 <div className="flex flex-col items-center text-green-600 animate-in fade-in zoom-in duration-300">
                   <CheckCircle2 className="w-16 h-16 mb-4" />
@@ -497,7 +504,7 @@ export default function Settings() {
                 <div className="flex flex-col items-center text-muted-foreground">
                   <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
                   <p className="text-sm font-medium">
-                    {isPairing ? 'Simulando scan...' : 'Gerando código seguro...'}
+                    {isPairing ? 'Autenticando...' : 'Gerando código seguro...'}
                   </p>
                 </div>
               ) : qrError ? (
@@ -505,25 +512,43 @@ export default function Settings() {
                   <XCircle className="w-12 h-12" />
                   <p className="text-sm font-medium">{qrError}</p>
                   <Button variant="outline" size="sm" onClick={generateQR}>
-                    Tentar Novamente
+                    Regenerate QR Code
                   </Button>
                 </div>
               ) : qrExpired ? (
-                <div className="flex flex-col items-center justify-center space-y-4 text-muted-foreground text-center">
+                <div className="flex flex-col items-center justify-center space-y-4 text-muted-foreground text-center animate-in fade-in">
+                  <div className="relative">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=0&data=${encodeURIComponent(qrData)}`}
+                      alt="QR Code"
+                      className="w-56 h-56 object-contain rounded opacity-20 grayscale"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <RefreshCw className="w-12 h-12 text-muted-foreground" />
+                    </div>
+                  </div>
                   <p className="text-sm font-medium text-destructive">Código QR Expirado</p>
                   <Button variant="outline" size="sm" onClick={generateQR}>
-                    <RefreshCw className="w-4 h-4 mr-2" /> Atualizar Código
+                    <RefreshCw className="w-4 h-4 mr-2" /> Regenerate QR Code
                   </Button>
                 </div>
               ) : (
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=256x256&margin=0&data=${encodeURIComponent(qrData)}`}
-                  alt="QR Code"
-                  className="w-56 h-56 object-contain rounded animate-in fade-in duration-500"
-                />
+                <div className="flex flex-col items-center space-y-4 animate-in fade-in duration-500">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=0&data=${encodeURIComponent(qrData)}`}
+                    alt="QR Code"
+                    className="w-56 h-56 object-contain rounded"
+                  />
+                  <div className="w-full space-y-2">
+                    <Progress value={(qrTimeLeft / QR_LIFESPAN) * 100} className="h-2" />
+                    <p className="text-xs text-center text-muted-foreground">
+                      Aguardando scan... (Expira em {qrTimeLeft}s)
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
-            {!qrSuccess && (
+            {!qrSuccess && !isLoadingQR && !isPairing && (
               <div className="space-y-3 w-full max-w-sm">
                 <h4 className="font-semibold text-sm">Instruções:</h4>
                 <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
