@@ -9,6 +9,7 @@ import { Slider } from '@/components/ui/slider'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog,
   DialogContent,
@@ -42,6 +43,7 @@ import {
   Loader2,
   RefreshCw,
   MessageSquare,
+  ShieldAlert,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { getUserSettings, updateUserSettings, createUserSettings } from '@/services/settings'
@@ -49,6 +51,8 @@ import { useRealtime } from '@/hooks/use-realtime'
 import pb from '@/lib/pocketbase/client'
 
 const QR_LIFESPAN = 45
+
+type QrStatus = 'idle' | 'generating' | 'ready' | 'expired' | 'validating' | 'success' | 'error'
 
 export default function Settings() {
   const { toast } = useToast()
@@ -63,18 +67,15 @@ export default function Settings() {
 
   const [newCategory, setNewCategory] = useState('')
   const [isSyncing, setIsSyncing] = useState(false)
+
   const [isQRDialogOpen, setIsQRDialogOpen] = useState(false)
-  const [isPairing, setIsPairing] = useState(false)
+  const [qrStatus, setQrStatus] = useState<QrStatus>('idle')
+  const [qrData, setQrData] = useState('')
+  const [qrTimeLeft, setQrTimeLeft] = useState(0)
+  const [qrErrorMessage, setQrErrorMessage] = useState('')
 
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
-
-  const [qrData, setQrData] = useState('')
-  const [qrExpired, setQrExpired] = useState(false)
-  const [isLoadingQR, setIsLoadingQR] = useState(false)
-  const [qrError, setQrError] = useState<string | null>(null)
-  const [qrSuccess, setQrSuccess] = useState(false)
-  const [qrTimeLeft, setQrTimeLeft] = useState(0)
 
   const loadSettings = useCallback(async () => {
     if (!user) return
@@ -105,12 +106,18 @@ export default function Settings() {
     'user_settings',
     (e) => {
       if (user && e.record.user === user.id) {
-        setWaConnected(e.record.whatsapp_connected || false)
+        const isNowConnected = e.record.whatsapp_connected || false
+        setWaConnected(isNowConnected)
         setAiAggressiveness(e.record.ai_aggressiveness ?? 50)
         setCategories(e.record.categories || [])
-        if (e.record.whatsapp_connected && isQRDialogOpen) {
-          setQrSuccess(true)
-          toast({ title: 'WhatsApp Conectado', description: 'Conta vinculada com sucesso.' })
+
+        // Handle successful connection feedback via SSE
+        if (isNowConnected && isQRDialogOpen && qrStatus !== 'success') {
+          setQrStatus('success')
+          toast({
+            title: 'WhatsApp Conectado',
+            description: 'Sessão iniciada e sincronizada com sucesso.',
+          })
         }
       }
     },
@@ -118,66 +125,66 @@ export default function Settings() {
   )
 
   useEffect(() => {
-    if (qrSuccess) {
+    if (qrStatus === 'success') {
       const t = setTimeout(() => {
         setIsQRDialogOpen(false)
-        setQrSuccess(false)
+        setQrStatus('idle')
       }, 2500)
       return () => clearTimeout(t)
     }
-  }, [qrSuccess])
+  }, [qrStatus])
 
-  const generateQR = useCallback(async () => {
-    setIsLoadingQR(true)
-    setQrError(null)
-    setQrExpired(false)
-    setQrSuccess(false)
+  const generateQR = useCallback(async (isRetry = false) => {
+    setQrStatus('generating')
+    setQrErrorMessage('')
     setQrTimeLeft(QR_LIFESPAN)
     try {
+      if (isRetry) {
+        // Clear any stale session on the backend before generating a new QR
+        await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' }).catch(() => {})
+      }
       const res = await pb.send<{ qr: string }>('/backend/v1/whatsapp/qr', { method: 'GET' })
       if (res && res.qr) {
         setQrData(res.qr)
+        setQrStatus('ready')
       } else {
         throw new Error('Invalid QR response')
       }
     } catch (e) {
-      setQrError('Connection handshake failed. Please try generating a new QR code.')
-      toast({ title: 'Erro', description: 'Falha ao obter QR Code.', variant: 'destructive' })
-    } finally {
-      setIsLoadingQR(false)
+      setQrStatus('error')
+      setQrErrorMessage(
+        'Falha ao obter QR Code válido do Gateway. Verifique sua conexão e tente novamente.',
+      )
     }
-  }, [toast])
+  }, [])
 
   useEffect(() => {
     let timer: NodeJS.Timeout
-    if (isQRDialogOpen && !isLoadingQR && !qrError && !qrSuccess && qrData && qrTimeLeft > 0) {
-      timer = setTimeout(() => {
-        setQrTimeLeft((prev) => prev - 1)
-      }, 1000)
-    } else if (qrTimeLeft === 0 && qrData && !qrSuccess && !qrError && isQRDialogOpen) {
-      setQrExpired(true)
+    if (isQRDialogOpen && qrStatus === 'ready' && qrTimeLeft > 0) {
+      timer = setTimeout(() => setQrTimeLeft((prev) => prev - 1), 1000)
+    } else if (qrTimeLeft === 0 && qrStatus === 'ready' && isQRDialogOpen) {
+      setQrStatus('expired')
     }
     return () => clearTimeout(timer)
-  }, [isQRDialogOpen, isLoadingQR, qrError, qrSuccess, qrData, qrTimeLeft])
+  }, [isQRDialogOpen, qrStatus, qrTimeLeft])
 
   const handleCancelPairing = async () => {
-    if (waConnected || qrSuccess) {
+    if (waConnected || qrStatus === 'success') {
       setIsQRDialogOpen(false)
       return
     }
     try {
-      await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' })
-    } catch (e) {
-      console.error('Failed to disconnect', e)
+      await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' }).catch(() => {})
     } finally {
       setIsQRDialogOpen(false)
+      setQrStatus('idle')
       setQrData('')
     }
   }
 
   const handleConnectClick = () => {
-    generateQR()
     setIsQRDialogOpen(true)
+    generateQR(true) // Force fresh session initialization
   }
 
   const handleAddCategory = () => {
@@ -200,17 +207,19 @@ export default function Settings() {
   }
 
   const simulatePairing = async () => {
-    if (!settingsId) return
-    setIsPairing(true)
+    if (!settingsId || qrStatus !== 'ready') return
+    setQrStatus('validating')
     setTimeout(async () => {
       try {
         await updateUserSettings(settingsId, { whatsapp_connected: true })
         setLastSync(new Date().toLocaleString('pt-BR'))
+        // Do not set success here. The SSE useRealtime listener will pick up the DB change
+        // and update the status to 'success', providing a true reactive feedback loop.
       } catch (err) {
-        toast({ title: 'Erro', description: 'Falha ao vincular.', variant: 'destructive' })
-        setIsPairing(false)
+        setQrStatus('error')
+        setQrErrorMessage('Falha na autenticação do dispositivo. QR Code pode ser inválido.')
       }
-    }, 1500)
+    }, 2000)
   }
 
   const confirmDisconnect = async () => {
@@ -220,7 +229,7 @@ export default function Settings() {
       await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' })
       await updateUserSettings(settingsId, { whatsapp_connected: false })
       setLastSync(null)
-      toast({ title: 'Desconectado', description: 'WhatsApp foi desvinculado.' })
+      toast({ title: 'Desconectado', description: 'Sessão do WhatsApp encerrada e dados limpos.' })
     } catch (err) {
       toast({ title: 'Erro', description: 'Falha ao desvincular.', variant: 'destructive' })
     } finally {
@@ -279,7 +288,9 @@ export default function Settings() {
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Smartphone className="w-5 h-5 text-primary" /> Conexão WhatsApp
               </CardTitle>
-              <CardDescription>Gerencie a conexão da sua conta.</CardDescription>
+              <CardDescription>
+                Gerencie a conexão da sua conta e sincronização do Gateway.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg bg-card gap-4">
@@ -306,10 +317,12 @@ export default function Settings() {
                     {waConnected ? (
                       <div className="text-sm text-muted-foreground">
                         <p>Número: {waPhoneNumber}</p>
-                        {lastSync && <p>Sincronizado: {lastSync}</p>}
+                        {lastSync && <p>Último handshake: {lastSync}</p>}
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground">Nenhuma conta vinculada.</p>
+                      <p className="text-sm text-muted-foreground">
+                        Nenhuma sessão ativa encontrada.
+                      </p>
                     )}
                   </div>
                 </div>
@@ -372,7 +385,7 @@ export default function Settings() {
                       onClick={handleConnectClick}
                       className="flex-1 sm:flex-none"
                     >
-                      <QrCode className="w-4 h-4 mr-2" /> Conectar
+                      <QrCode className="w-4 h-4 mr-2" /> Conectar via QR Code
                     </Button>
                   )}
                 </div>
@@ -383,7 +396,7 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Settings2 className="w-5 h-5 text-primary" /> Categorias
+                <Settings2 className="w-5 h-5 text-primary" /> Categorias de Organização
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -428,7 +441,7 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
-                <Label className="text-base">Agressividade na Detecção de Prazos</Label>
+                <Label className="text-base">Sensibilidade na Detecção de Prazos</Label>
                 <Slider
                   value={[aiAggressiveness]}
                   onValueChange={(val) => setAiAggressiveness(val[0])}
@@ -455,7 +468,7 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
-                <Label className="text-base">Mascaramento de Dados Sensíveis</Label>
+                <Label className="text-base">Mascaramento de Dados Sensíveis (PII)</Label>
                 <Switch defaultChecked />
               </div>
             </CardContent>
@@ -471,7 +484,7 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
-                <Label className="text-base">Resumo Diário (Briefing)</Label>
+                <Label className="text-base">Resumo Diário de Conversas (Briefing)</Label>
                 <Switch defaultChecked />
               </div>
             </CardContent>
@@ -488,34 +501,53 @@ export default function Settings() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Conectar WhatsApp</DialogTitle>
+            <DialogTitle>Vincular Gateway do WhatsApp</DialogTitle>
             <DialogDescription>
-              Escaneie o código QR abaixo com seu WhatsApp para vincular a conta.
+              Escaneie o código QR para iniciar uma nova sessão segura com o Gateway.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center p-6 space-y-6">
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-border relative min-h-[256px] min-w-[256px] flex flex-col items-center justify-center">
-              {qrSuccess ? (
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-border relative min-h-[256px] min-w-[256px] flex flex-col items-center justify-center overflow-hidden">
+              {qrStatus === 'success' && (
                 <div className="flex flex-col items-center text-green-600 animate-in fade-in zoom-in duration-300">
                   <CheckCircle2 className="w-16 h-16 mb-4" />
-                  <p className="font-medium text-lg">Conectado!</p>
+                  <p className="font-medium text-lg">Sessão Estabelecida!</p>
                 </div>
-              ) : isLoadingQR || isPairing ? (
-                <div className="flex flex-col items-center text-muted-foreground">
-                  <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-                  <p className="text-sm font-medium">
-                    {isPairing ? 'Autenticando...' : 'Gerando código seguro...'}
+              )}
+
+              {qrStatus === 'generating' && (
+                <div className="flex flex-col items-center space-y-4 w-full">
+                  <Skeleton className="w-56 h-56 rounded-md" />
+                  <div className="flex items-center text-muted-foreground">
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <span className="text-sm font-medium">Inicializando handshake...</span>
+                  </div>
+                </div>
+              )}
+
+              {qrStatus === 'validating' && (
+                <div className="flex flex-col items-center text-primary animate-in fade-in">
+                  <Loader2 className="w-12 h-12 mb-4 animate-spin" />
+                  <p className="font-medium text-lg">Validando Token...</p>
+                  <p className="text-sm text-muted-foreground mt-2 text-center">
+                    Aguardando confirmação do gateway.
+                    <br />
+                    Não feche esta janela.
                   </p>
                 </div>
-              ) : qrError ? (
-                <div className="flex flex-col items-center text-destructive text-center space-y-4 p-4">
-                  <XCircle className="w-12 h-12" />
-                  <p className="text-sm font-medium">{qrError}</p>
-                  <Button variant="outline" size="sm" onClick={generateQR}>
-                    Regenerate QR Code
+              )}
+
+              {qrStatus === 'error' && (
+                <div className="flex flex-col items-center text-destructive text-center space-y-4 p-4 animate-in fade-in">
+                  <ShieldAlert className="w-12 h-12" />
+                  <p className="text-sm font-medium">{qrErrorMessage}</p>
+                  <Button variant="outline" size="sm" onClick={() => generateQR(true)}>
+                    Limpar Sessão e Tentar Novamente
                   </Button>
                 </div>
-              ) : qrExpired ? (
+              )}
+
+              {qrStatus === 'expired' && (
                 <div className="flex flex-col items-center justify-center space-y-4 text-muted-foreground text-center animate-in fade-in">
                   <div className="relative">
                     <img
@@ -527,12 +559,14 @@ export default function Settings() {
                       <RefreshCw className="w-12 h-12 text-muted-foreground" />
                     </div>
                   </div>
-                  <p className="text-sm font-medium text-destructive">Código QR Expirado</p>
-                  <Button variant="outline" size="sm" onClick={generateQR}>
-                    <RefreshCw className="w-4 h-4 mr-2" /> Regenerate QR Code
+                  <p className="text-sm font-medium text-destructive">QR Code Expirado</p>
+                  <Button variant="outline" size="sm" onClick={() => generateQR(true)}>
+                    <RefreshCw className="w-4 h-4 mr-2" /> Gerar Novo Código
                   </Button>
                 </div>
-              ) : (
+              )}
+
+              {qrStatus === 'ready' && (
                 <div className="flex flex-col items-center space-y-4 animate-in fade-in duration-500">
                   <img
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=0&data=${encodeURIComponent(qrData)}`}
@@ -542,20 +576,21 @@ export default function Settings() {
                   <div className="w-full space-y-2">
                     <Progress value={(qrTimeLeft / QR_LIFESPAN) * 100} className="h-2" />
                     <p className="text-xs text-center text-muted-foreground">
-                      Aguardando scan... (Expira em {qrTimeLeft}s)
+                      Aguardando validação do aparelho... (Expira em {qrTimeLeft}s)
                     </p>
                   </div>
                 </div>
               )}
             </div>
-            {!qrSuccess && !isLoadingQR && !isPairing && (
+
+            {['generating', 'ready'].includes(qrStatus) && (
               <div className="space-y-3 w-full max-w-sm">
-                <h4 className="font-semibold text-sm">Instruções:</h4>
+                <h4 className="font-semibold text-sm">Instruções para conexão:</h4>
                 <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-                  <li>Abra o WhatsApp no seu celular</li>
-                  <li>Toque em Configurações &gt; Aparelhos Conectados</li>
+                  <li>Abra o WhatsApp no seu celular principal</li>
+                  <li>Acesse Configurações &gt; Aparelhos Conectados</li>
                   <li>Toque em "Conectar um aparelho"</li>
-                  <li>Aponte a câmera para este código</li>
+                  <li>Aponte a câmera para o código acima para iniciar o handshake</li>
                 </ol>
               </div>
             )}
@@ -564,9 +599,9 @@ export default function Settings() {
             <Button onClick={handleCancelPairing} variant="ghost" className="text-muted-foreground">
               Cancelar
             </Button>
-            {!isLoadingQR && !qrError && !qrExpired && !qrSuccess && !isPairing && (
+            {qrStatus === 'ready' && (
               <Button onClick={simulatePairing} variant="secondary" size="sm">
-                Simular Scan
+                Simular Leitura
               </Button>
             )}
           </div>
@@ -576,10 +611,10 @@ export default function Settings() {
       <AlertDialog open={showDisconnectConfirm} onOpenChange={setShowDisconnectConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Desconectar WhatsApp?</AlertDialogTitle>
+            <AlertDialogTitle>Encerrar Sessão do WhatsApp?</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja desvincular sua conta do WhatsApp? Suas mensagens deixarão de
-              ser sincronizadas.
+              Isso irá destruir o token de autenticação no Gateway e parar a sincronização de novas
+              mensagens em tempo real.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -593,7 +628,7 @@ export default function Settings() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isDisconnecting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Desconectar
+              Confirmar Desconexão
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
