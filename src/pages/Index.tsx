@@ -49,11 +49,18 @@ export default function Index() {
 
   const loadData = async () => {
     try {
-      if (user?.id) {
-        await ensureUserSettings(user.id)
-      }
+      // Execute non-blocking initializations concurrently to ensure index page stability
+      const [fetchedTasks, fetchedChats] = await Promise.all([
+        getTasks(),
+        getChats(),
+        user?.id
+          ? ensureUserSettings(user.id).catch((err) => {
+              console.error('Non-fatal error ensuring settings:', err)
+              return null
+            })
+          : Promise.resolve(null),
+      ])
 
-      const [fetchedTasks, fetchedChats] = await Promise.all([getTasks(), getChats()])
       setTasks(fetchedTasks)
       setChats(fetchedChats)
     } catch (err) {
