@@ -6,8 +6,21 @@ import { Label } from '@/components/ui/label'
 import { useAuth } from '@/hooks/use-auth'
 import { extractFieldErrors, getErrorMessage, type FieldErrors } from '@/lib/pocketbase/errors'
 import { Bot } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import pb from '@/lib/pocketbase/client'
 
 export default function Login() {
+  const [isResetOpen, setIsResetOpen] = useState(false)
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetMsg, setResetMsg] = useState('')
+  const [resetError, setResetError] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
   const [identity, setIdentity] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -15,6 +28,21 @@ export default function Login() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const { signIn } = useAuth()
   const navigate = useNavigate()
+
+  const handleResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setResetLoading(true)
+    setResetMsg('')
+    setResetError('')
+    try {
+      await pb.collection('users').requestPasswordReset(resetEmail)
+      setResetMsg('Um link de recuperação foi enviado para o seu email.')
+    } catch (err) {
+      setResetError(getErrorMessage(err))
+    } finally {
+      setResetLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -79,10 +107,60 @@ export default function Login() {
             )}
           </div>
 
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="link"
+              className="px-0 font-normal h-auto text-xs"
+              onClick={() => setIsResetOpen(true)}
+            >
+              Esqueceu a senha?
+            </Button>
+          </div>
+
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? 'Entrando...' : 'Entrar'}
           </Button>
         </form>
+
+        <Dialog
+          open={isResetOpen}
+          onOpenChange={(open) => {
+            setIsResetOpen(open)
+            if (!open) {
+              setResetEmail('')
+              setResetMsg('')
+              setResetError('')
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Recuperar Senha</DialogTitle>
+              <DialogDescription>
+                Digite seu email para receber um link de redefinição de senha.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleResetSubmit} className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Email</Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                />
+              </div>
+              {resetMsg && <p className="text-sm text-green-600">{resetMsg}</p>}
+              {resetError && <p className="text-sm text-destructive">{resetError}</p>}
+              <Button type="submit" className="w-full" disabled={resetLoading}>
+                {resetLoading ? 'Enviando...' : 'Enviar Link de Recuperação'}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
           Não tem uma conta?{' '}
