@@ -1,7 +1,7 @@
 migrate(
   (app) => {
     const col = app.findCollectionByNameOrId('user_settings')
-    col.addIndex('CREATE UNIQUE INDEX idx_user_settings_user ON user_settings (user)')
+    col.addIndex('idx_user_settings_user', true, 'user', '')
     app.save(col)
   },
   (app) => {
