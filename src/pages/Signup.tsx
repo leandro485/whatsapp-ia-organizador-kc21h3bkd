@@ -9,8 +9,10 @@ import { Bot } from 'lucide-react'
 
 export default function Signup() {
   const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
@@ -23,7 +25,13 @@ export default function Signup() {
     setError('')
     setFieldErrors({})
 
-    const { error: signUpError } = await signUp({ name, email, password })
+    const { error: signUpError } = await signUp({
+      name,
+      username,
+      email,
+      password,
+      passwordConfirm,
+    })
     if (signUpError) {
       setError(getErrorMessage(signUpError))
       setFieldErrors(extractFieldErrors(signUpError))
@@ -58,8 +66,23 @@ export default function Signup() {
               placeholder="Seu nome"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              required
             />
             {fieldErrors.name && <p className="text-xs text-destructive">{fieldErrors.name}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              placeholder="seu_username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+            {fieldErrors.username && (
+              <p className="text-xs text-destructive">{fieldErrors.username}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -86,6 +109,20 @@ export default function Signup() {
             />
             {fieldErrors.password && (
               <p className="text-xs text-destructive">{fieldErrors.password}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="passwordConfirm">Confirmar Senha</Label>
+            <Input
+              id="passwordConfirm"
+              type="password"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              required
+            />
+            {fieldErrors.passwordConfirm && (
+              <p className="text-xs text-destructive">{fieldErrors.passwordConfirm}</p>
             )}
           </div>
 

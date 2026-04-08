@@ -8,7 +8,7 @@ import { extractFieldErrors, getErrorMessage, type FieldErrors } from '@/lib/poc
 import { Bot } from 'lucide-react'
 
 export default function Login() {
-  const [email, setEmail] = useState('')
+  const [identity, setIdentity] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -22,9 +22,9 @@ export default function Login() {
     setError('')
     setFieldErrors({})
 
-    const { error: signInError } = await signIn({ email, password })
+    const { error: signInError } = await signIn({ identity, password })
     if (signInError) {
-      setError(getErrorMessage(signInError))
+      setError('Email/Username ou senha inválidos.')
       setFieldErrors(extractFieldErrors(signInError))
       setLoading(false)
     } else {
@@ -51,16 +51,18 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="identity">Email ou Username</Label>
             <Input
-              id="email"
-              type="email"
-              placeholder="seu@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              id="identity"
+              type="text"
+              placeholder="seu@email.com ou username"
+              value={identity}
+              onChange={(e) => setIdentity(e.target.value)}
               required
             />
-            {fieldErrors.email && <p className="text-xs text-destructive">{fieldErrors.email}</p>}
+            {fieldErrors.identity && (
+              <p className="text-xs text-destructive">{fieldErrors.identity}</p>
+            )}
           </div>
 
           <div className="space-y-2">
