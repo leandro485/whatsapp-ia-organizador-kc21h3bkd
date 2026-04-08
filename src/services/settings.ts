@@ -56,6 +56,34 @@ export const ensureUserSettings = async (userId: string) => {
       const existing = await getUserSettings(currentUserId)
 
       if (existing) {
+        const needsUpdate =
+          existing.ai_aggressiveness === undefined ||
+          existing.ai_aggressiveness === null ||
+          existing.reminders_enabled === undefined ||
+          existing.reminders_enabled === null ||
+          existing.reminder_lead_time === undefined ||
+          existing.reminder_lead_time === null ||
+          !Array.isArray(existing.categories) ||
+          existing.categories.length === 0
+
+        if (needsUpdate) {
+          const updatePayload = {
+            ai_aggressiveness: existing.ai_aggressiveness ?? defaultSettings.ai_aggressiveness,
+            reminders_enabled: existing.reminders_enabled ?? defaultSettings.reminders_enabled,
+            reminder_lead_time: existing.reminder_lead_time ?? defaultSettings.reminder_lead_time,
+            categories:
+              Array.isArray(existing.categories) && existing.categories.length > 0
+                ? existing.categories
+                : defaultSettings.categories,
+          }
+          try {
+            return await updateUserSettings(existing.id, updatePayload)
+          } catch (updateError) {
+            console.error('Failed to update missing default settings', updateError)
+            return existing
+          }
+        }
+
         return existing
       }
 
