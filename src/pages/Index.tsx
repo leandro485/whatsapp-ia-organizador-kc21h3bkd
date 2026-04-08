@@ -38,6 +38,7 @@ import { updateChatPinned } from '@/services/chats'
 export default function Index() {
   const [tasks, setTasks] = useState<any[]>([])
   const [chats, setChats] = useState<any[]>([])
+  const [initialLoading, setInitialLoading] = useState(true)
 
   const [searchTerm, setSearchTerm] = useState('')
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
@@ -49,17 +50,7 @@ export default function Index() {
   const loadData = async () => {
     try {
       if (user?.id) {
-        try {
-          await ensureUserSettings(user.id)
-        } catch (settingsErr) {
-          console.error('Failed to initialize settings:', settingsErr)
-          toast({
-            variant: 'destructive',
-            title: 'Aviso',
-            description:
-              'Não foi possível carregar as configurações. Algumas funcionalidades podem estar indisponíveis.',
-          })
-        }
+        await ensureUserSettings(user.id)
       }
 
       const [fetchedTasks, fetchedChats] = await Promise.all([getTasks(), getChats()])
@@ -72,6 +63,8 @@ export default function Index() {
         title: 'Erro de Conexão',
         description: 'Ocorreu um problema ao carregar os dados do painel.',
       })
+    } finally {
+      setInitialLoading(false)
     }
   }
 
@@ -159,6 +152,14 @@ export default function Index() {
   const recentChatsWithSummary = chats
     .filter((c) => c.updated && new Date(c.updated) >= last7Days && c.summary)
     .slice(0, 5)
+
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6 h-full pb-8">
