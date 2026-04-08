@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,7 +53,7 @@ import pb from '@/lib/pocketbase/client'
 
 const QR_LIFESPAN = 45
 
-type QrStatus = 'idle' | 'generating' | 'ready' | 'expired' | 'validating' | 'success' | 'error'
+type QrStatus = 'idle' | 'generating' | 'ready' | 'validating' | 'success' | 'error'
 
 export default function Settings() {
   const { toast } = useToast()
@@ -163,10 +164,11 @@ export default function Settings() {
     if (isQRDialogOpen && qrStatus === 'ready' && qrTimeLeft > 0) {
       timer = setTimeout(() => setQrTimeLeft((prev) => prev - 1), 1000)
     } else if (qrTimeLeft === 0 && qrStatus === 'ready' && isQRDialogOpen) {
-      setQrStatus('expired')
+      // Automatically request a new QR code when it expires
+      generateQR(true)
     }
     return () => clearTimeout(timer)
-  }, [isQRDialogOpen, qrStatus, qrTimeLeft])
+  }, [isQRDialogOpen, qrStatus, qrTimeLeft, generateQR])
 
   const handleCancelPairing = async () => {
     if (waConnected || qrStatus === 'success') {
@@ -538,30 +540,14 @@ export default function Settings() {
               )}
 
               {qrStatus === 'error' && (
-                <div className="flex flex-col items-center text-destructive text-center space-y-4 p-4 animate-in fade-in">
-                  <ShieldAlert className="w-12 h-12" />
-                  <p className="text-sm font-medium">{qrErrorMessage}</p>
-                  <Button variant="outline" size="sm" onClick={() => generateQR(true)}>
+                <div className="flex flex-col items-center w-full space-y-4 animate-in fade-in">
+                  <Alert variant="destructive" className="text-left">
+                    <ShieldAlert className="w-4 h-4" />
+                    <AlertTitle>Erro de Conexão</AlertTitle>
+                    <AlertDescription>{qrErrorMessage}</AlertDescription>
+                  </Alert>
+                  <Button variant="outline" onClick={() => generateQR(true)} className="w-full">
                     Limpar Sessão e Tentar Novamente
-                  </Button>
-                </div>
-              )}
-
-              {qrStatus === 'expired' && (
-                <div className="flex flex-col items-center justify-center space-y-4 text-muted-foreground text-center animate-in fade-in">
-                  <div className="relative">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=0&data=${encodeURIComponent(qrData)}`}
-                      alt="QR Code"
-                      className="w-56 h-56 object-contain rounded opacity-20 grayscale"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <RefreshCw className="w-12 h-12 text-muted-foreground" />
-                    </div>
-                  </div>
-                  <p className="text-sm font-medium text-destructive">QR Code Expirado</p>
-                  <Button variant="outline" size="sm" onClick={() => generateQR(true)}>
-                    <RefreshCw className="w-4 h-4 mr-2" /> Gerar Novo Código
                   </Button>
                 </div>
               )}
@@ -600,7 +586,21 @@ export default function Settings() {
               Cancelar
             </Button>
             {qrStatus === 'ready' && (
-              <Button onClick={simulatePairing} variant="secondary" size="sm">
+              <Button
+                onClick={(e) => {
+                  if (e.altKey) {
+                    setQrStatus('error')
+                    setQrErrorMessage(
+                      'Falha na autenticação do dispositivo. QR Code pode ser inválido.',
+                    )
+                  } else {
+                    simulatePairing()
+                  }
+                }}
+                variant="secondary"
+                size="sm"
+                title="Dica: Segure ALT ao clicar para simular falha"
+              >
                 Simular Leitura
               </Button>
             )}
