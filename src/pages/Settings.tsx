@@ -522,7 +522,7 @@ export default function Settings() {
                   <Skeleton className="w-56 h-56 rounded-md" />
                   <div className="flex items-center text-muted-foreground">
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    <span className="text-sm font-medium">Inicializando handshake...</span>
+                    <span className="text-sm font-medium">Gerando novo código...</span>
                   </div>
                 </div>
               )}
