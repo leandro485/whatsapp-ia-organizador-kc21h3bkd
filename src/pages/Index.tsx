@@ -56,14 +56,6 @@ export default function Index() {
           await ensureUserSettings(user.id)
         } catch (err) {
           console.error('Error ensuring settings:', err)
-          try {
-            const existing = await getUserSettings(user.id)
-            if (!existing) {
-              console.warn('No settings found on fallback fetch.')
-            }
-          } catch (fallbackErr) {
-            console.error('Fallback fetch failed:', fallbackErr)
-          }
         }
       }
 
