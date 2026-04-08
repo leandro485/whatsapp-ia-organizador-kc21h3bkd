@@ -3,6 +3,7 @@ import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppProvider } from '@/stores/main'
+import { ThemeProvider } from '@/components/theme-provider'
 import Layout from '@/components/Layout'
 import Index from '@/pages/Index'
 import Conversations from '@/pages/Conversations'
@@ -47,13 +48,15 @@ const AppRoutes = () => (
 const App = () => (
   <AuthProvider>
     <AppProvider>
-      <BrowserRouter future={{ v7_startTransition: false, v7_relativeSplatPath: false }}>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <AppRoutes />
-        </TooltipProvider>
-      </BrowserRouter>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <BrowserRouter future={{ v7_startTransition: false, v7_relativeSplatPath: false }}>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <AppRoutes />
+          </TooltipProvider>
+        </BrowserRouter>
+      </ThemeProvider>
     </AppProvider>
   </AuthProvider>
 )

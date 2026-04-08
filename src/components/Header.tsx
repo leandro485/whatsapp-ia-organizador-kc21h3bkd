@@ -18,6 +18,7 @@ import { useAppStore } from '@/stores/main'
 import { useAuth } from '@/hooks/use-auth'
 import { useRealtime } from '@/hooks/use-realtime'
 import { getUserSettings } from '@/services/settings'
+import { ModeToggle } from '@/components/mode-toggle'
 import { useToast } from '@/hooks/use-toast'
 
 export default function Header() {
@@ -88,6 +89,7 @@ export default function Header() {
           <RefreshCw className="h-3.5 w-3.5 text-primary" />
           Sincronizar
         </Button>
+        <ModeToggle />
         <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full">
           <Bell className="h-4.5 w-4.5 text-muted-foreground" />
           <span className="absolute right-1.5 top-1.5 flex h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
