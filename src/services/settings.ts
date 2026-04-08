@@ -1,10 +1,13 @@
 import pb from '@/lib/pocketbase/client'
+import { ClientResponseError } from 'pocketbase'
 
 export const getUserSettings = async (userId: string) => {
   try {
-    const records = await pb.collection('user_settings').getFullList({ filter: `user="${userId}"` })
-    return records[0] || null
+    return await pb.collection('user_settings').getFirstListItem(`user="${userId}"`)
   } catch (error) {
+    if (error instanceof ClientResponseError && error.status === 404) {
+      return null
+    }
     console.error('Error fetching user settings:', error)
     throw error // Throw to prevent accidental creation when fetch fails
   }
@@ -47,10 +50,15 @@ export const ensureUserSettings = async (userId: string) => {
         // 2. Conditional creation with validated payload
         return await createUserSettings(defaultSettings)
       } catch (createError) {
-        // Handle potential race condition where another concurrent request created it first
-        console.warn('Failed to create settings, checking for concurrent creation...', createError)
-        const concurrentExisting = await getUserSettings(userId)
-        if (concurrentExisting) return concurrentExisting
+        // If creation fails with a 400 error (e.g., unique constraint on user), attempt to fetch again
+        if (createError instanceof ClientResponseError && createError.status === 400) {
+          console.warn(
+            'Failed to create settings (400), checking for concurrent creation...',
+            createError,
+          )
+          const concurrentExisting = await getUserSettings(userId)
+          if (concurrentExisting) return concurrentExisting
+        }
 
         throw createError
       }
