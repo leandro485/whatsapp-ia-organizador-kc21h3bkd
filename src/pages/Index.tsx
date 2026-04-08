@@ -26,8 +26,12 @@ import {
   CalendarIcon,
   PieChart,
   Filter,
+  Pin,
+  Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useToast } from '@/hooks/use-toast'
+import { updateChatPinned } from '@/services/chats'
 
 export default function Index() {
   const [tasks, setTasks] = useState<any[]>([])
@@ -37,6 +41,7 @@ export default function Index() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
   const [statusFilter, setStatusFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
+  const { toast } = useToast()
 
   const loadData = async () => {
     try {
@@ -54,6 +59,22 @@ export default function Index() {
 
   useRealtime('tasks', () => loadData())
   useRealtime('chats', () => loadData())
+
+  const handleTogglePin = async (chat: any) => {
+    try {
+      await updateChatPinned(chat.id, !chat.pinned)
+      toast({
+        title: chat.pinned ? 'Chat desfixado' : 'Chat fixado',
+        description: `A conversa com ${chat.name} foi ${chat.pinned ? 'removida' : 'adicionada'} ao topo.`,
+      })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Não foi possível alterar o status do chat.',
+      })
+    }
+  }
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -109,6 +130,14 @@ export default function Index() {
   const lowCount = tasks.filter((t) => t.priority === 'low').length
   const noneCount = tasks.length - (highCount + medCount + lowCount)
 
+  const last7Days = new Date()
+  last7Days.setDate(last7Days.getDate() - 7)
+
+  const recentTasks = tasks.filter((t) => t.created && new Date(t.created) >= last7Days).slice(0, 5)
+  const recentChatsWithSummary = chats
+    .filter((c) => c.updated && new Date(c.updated) >= last7Days && c.summary)
+    .slice(0, 5)
+
   return (
     <div className="flex flex-col gap-6 h-full pb-8">
       <div className="flex items-center justify-between">
@@ -121,6 +150,61 @@ export default function Index() {
           </p>
         </div>
       </div>
+
+      <Card className="col-span-1 md:col-span-3 shadow-sm border-primary/20 bg-primary/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2 text-primary">
+            <Sparkles className="w-5 h-5" />
+            Resumo da Semana
+          </CardTitle>
+          <CardDescription>
+            Um resumo rápido (TL;DR) das suas atividades nos últimos 7 dias.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <ListTodo className="w-4 h-4 text-muted-foreground" /> Principais Tarefas
+              </h3>
+              {recentTasks.length > 0 ? (
+                <ul className="space-y-2">
+                  {recentTasks.map((t) => (
+                    <li key={t.id} className="text-sm text-muted-foreground flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
+                      <span className="line-clamp-2">{t.title}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground/70">Nenhuma tarefa recente.</p>
+              )}
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-muted-foreground" /> Destaques de Conversas
+              </h3>
+              {recentChatsWithSummary.length > 0 ? (
+                <ul className="space-y-2">
+                  {recentChatsWithSummary.map((c) => (
+                    <li key={c.id} className="text-sm text-muted-foreground flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
+                      <span className="line-clamp-2">
+                        <strong className="font-medium text-foreground">{c.name}:</strong>{' '}
+                        {c.summary}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground/70">
+                  Nenhum resumo de conversa recente.
+                </p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="col-span-1 md:col-span-3 shadow-sm border-muted">
         <CardHeader className="pb-4">
@@ -361,22 +445,46 @@ export default function Index() {
                 {chats.slice(0, 10).map((chat) => (
                   <div
                     key={chat.id}
-                    className="flex items-start justify-between border-b pb-4 last:border-0 last:pb-0"
+                    className={cn(
+                      'flex items-start justify-between border-b pb-4 last:border-0 last:pb-0 rounded-md p-2 -mx-2 transition-colors',
+                      chat.pinned && 'bg-muted/50',
+                    )}
                   >
-                    <div className="space-y-1 overflow-hidden pr-4">
-                      <p className="font-medium text-sm truncate">{chat.name}</p>
+                    <div className="flex-1 space-y-1 overflow-hidden pr-4">
+                      <p className="font-medium text-sm truncate flex items-center gap-2">
+                        {chat.name}
+                        {chat.pinned && (
+                          <Pin className="w-3 h-3 text-primary fill-current shrink-0" />
+                        )}
+                      </p>
                       <p className="text-xs text-muted-foreground line-clamp-2">
                         {chat.last_message || 'Nenhuma mensagem'}
                       </p>
                     </div>
-                    {chat.priority && (
-                      <Badge
-                        variant="secondary"
-                        className={`text-[10px] shrink-0 ${getPriorityColor(chat.priority)}`}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {chat.priority && (
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] ${getPriorityColor(chat.priority)}`}
+                        >
+                          {getPriorityLabel(chat.priority)}
+                        </Badge>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleTogglePin(chat)}
+                        title={chat.pinned ? 'Desfixar' : 'Fixar no topo'}
                       >
-                        {getPriorityLabel(chat.priority)}
-                      </Badge>
-                    )}
+                        <Pin
+                          className={cn(
+                            'w-4 h-4',
+                            chat.pinned ? 'fill-primary text-primary' : 'text-muted-foreground',
+                          )}
+                        />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
