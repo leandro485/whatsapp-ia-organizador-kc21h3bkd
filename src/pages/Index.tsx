@@ -1,15 +1,42 @@
 import { useEffect, useState } from 'react'
+import { format } from 'date-fns'
+import { DateRange } from 'react-day-picker'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
 import { useRealtime } from '@/hooks/use-realtime'
 import { getTasks } from '@/services/tasks'
 import { getChats } from '@/services/chats'
-import { MessageSquare, CheckCircle, Clock, AlertCircle, ListTodo } from 'lucide-react'
+import {
+  MessageSquare,
+  Clock,
+  ListTodo,
+  Search,
+  CalendarIcon,
+  PieChart,
+  Filter,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export default function Index() {
   const [tasks, setTasks] = useState<any[]>([])
   const [chats, setChats] = useState<any[]>([])
+
+  const [searchTerm, setSearchTerm] = useState('')
+  const [dateRange, setDateRange] = useState<DateRange | undefined>()
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
 
   const loadData = async () => {
     try {
@@ -27,10 +54,6 @@ export default function Index() {
 
   useRealtime('tasks', () => loadData())
   useRealtime('chats', () => loadData())
-
-  const detectedCount = tasks.filter((t) => t.status === 'detected').length
-  const inProgressCount = tasks.filter((t) => t.status === 'in_progress').length
-  const completedCount = tasks.filter((t) => t.status === 'completed').length
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -58,6 +81,34 @@ export default function Index() {
     }
   }
 
+  const filteredTasks = tasks.filter((t) => {
+    if (
+      searchTerm &&
+      !t.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
+      !t.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+      return false
+    if (statusFilter !== 'all' && t.status !== statusFilter) return false
+    if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false
+    if (dateRange?.from) {
+      if (!t.deadline) return false
+      const d = new Date(t.deadline)
+      if (d < dateRange.from) return false
+      if (dateRange.to && d > new Date(dateRange.to.setHours(23, 59, 59))) return false
+    }
+    return true
+  })
+
+  const detectedCount = tasks.filter((t) => t.status === 'detected').length
+  const inProgressCount = tasks.filter((t) => t.status === 'in_progress').length
+  const completedCount = tasks.filter((t) => t.status === 'completed').length
+  const totalTasks = tasks.length || 1
+
+  const highCount = tasks.filter((t) => t.priority === 'high').length
+  const medCount = tasks.filter((t) => t.priority === 'medium').length
+  const lowCount = tasks.filter((t) => t.priority === 'low').length
+  const noneCount = tasks.length - (highCount + medCount + lowCount)
+
   return (
     <div className="flex flex-col gap-6 h-full pb-8">
       <div className="flex items-center justify-between">
@@ -71,46 +122,233 @@ export default function Index() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tarefas Detectadas</CardTitle>
-            <AlertCircle className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{detectedCount}</div>
-            <p className="text-xs text-muted-foreground">Aguardando ação</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Em Andamento</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{inProgressCount}</div>
-            <p className="text-xs text-muted-foreground">Sendo resolvidas</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Concluídas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{completedCount}</div>
-            <p className="text-xs text-muted-foreground">Total finalizadas</p>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="col-span-1 md:col-span-3 shadow-sm border-muted">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <PieChart className="w-5 h-5 text-primary" />
+            Insights de Produtividade
+          </CardTitle>
+          <CardDescription>Distribuição global das tarefas registradas</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="font-medium">Por Status</span>
+                <span className="text-muted-foreground">{tasks.length} total</span>
+              </div>
+              <div className="flex h-3 w-full rounded-full overflow-hidden bg-secondary">
+                <div
+                  className="bg-green-500"
+                  style={{ width: `${(completedCount / totalTasks) * 100}%` }}
+                  title="Concluídas"
+                />
+                <div
+                  className="bg-yellow-500"
+                  style={{ width: `${(inProgressCount / totalTasks) * 100}%` }}
+                  title="Em Andamento"
+                />
+                <div
+                  className="bg-blue-500"
+                  style={{ width: `${(detectedCount / totalTasks) * 100}%` }}
+                  title="Detectadas"
+                />
+              </div>
+              <div className="flex flex-wrap gap-4 text-xs text-muted-foreground mt-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-green-500" /> Concluídas (
+                  {completedCount})
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-yellow-500" /> Em Andamento (
+                  {inProgressCount})
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" /> Detectadas ({detectedCount})
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="font-medium">Por Prioridade</span>
+              </div>
+              <div className="flex h-3 w-full rounded-full overflow-hidden bg-secondary">
+                <div
+                  className="bg-red-500"
+                  style={{ width: `${(highCount / totalTasks) * 100}%` }}
+                />
+                <div
+                  className="bg-yellow-500"
+                  style={{ width: `${(medCount / totalTasks) * 100}%` }}
+                />
+                <div
+                  className="bg-green-500"
+                  style={{ width: `${(lowCount / totalTasks) * 100}%` }}
+                />
+                <div
+                  className="bg-slate-300 dark:bg-slate-600"
+                  style={{ width: `${(noneCount / totalTasks) * 100}%` }}
+                />
+              </div>
+              <div className="flex flex-wrap gap-4 text-xs text-muted-foreground mt-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-red-500" /> Alta ({highCount})
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-yellow-500" /> Média ({medCount})
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-green-500" /> Baixa ({lowCount})
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-600" /> Sem
+                  Prioridade ({noneCount})
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="flex flex-col h-[500px]">
+        <Card className="flex flex-col h-[600px]">
+          <CardHeader className="pb-3 border-b">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <ListTodo className="w-5 h-5" /> Tarefas Filtradas
+              </CardTitle>
+              <Badge variant="secondary">{filteredTasks.length} resultados</Badge>
+            </div>
+            <div className="flex flex-col gap-3 pt-4">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar tarefas..."
+                  className="pl-9"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        'h-8 justify-start text-left font-normal flex-1 sm:flex-none',
+                        !dateRange && 'text-muted-foreground',
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          `${format(dateRange.from, 'dd/MM/yy')} - ${format(dateRange.to, 'dd/MM/yy')}`
+                        ) : (
+                          format(dateRange.from, 'dd/MM/yy')
+                        )
+                      ) : (
+                        <span>Filtrar Data</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={1}
+                    />
+                  </PopoverContent>
+                </Popover>
+
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-8 w-[130px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos Status</SelectItem>
+                    <SelectItem value="detected">Detectada</SelectItem>
+                    <SelectItem value="in_progress">Em Andamento</SelectItem>
+                    <SelectItem value="completed">Concluída</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                  <SelectTrigger className="h-8 w-[130px]">
+                    <SelectValue placeholder="Prioridade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="high">Alta</SelectItem>
+                    <SelectItem value="medium">Média</SelectItem>
+                    <SelectItem value="low">Baixa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-hidden pt-4">
+            <ScrollArea className="h-full pr-4">
+              <div className="space-y-4">
+                {filteredTasks.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Filter className="w-12 h-12 mb-4 opacity-20" />
+                    <p className="text-sm">Nenhuma tarefa encontrada com os filtros atuais.</p>
+                  </div>
+                )}
+                {filteredTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex flex-col border rounded-lg p-3 hover:bg-muted/50 transition-colors gap-2"
+                  >
+                    <div className="flex items-start justify-between">
+                      <p className="font-medium text-sm pr-4 line-clamp-1">{task.title}</p>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {task.priority && (
+                          <Badge
+                            variant="secondary"
+                            className={`text-[10px] ${getPriorityColor(task.priority)}`}
+                          >
+                            {getPriorityLabel(task.priority)}
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-[10px] capitalize">
+                          {task.status === 'in_progress'
+                            ? 'Em Andamento'
+                            : task.status === 'completed'
+                              ? 'Concluída'
+                              : 'Detectada'}
+                        </Badge>
+                      </div>
+                    </div>
+                    {task.deadline && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {format(new Date(task.deadline), 'dd/MM/yyyy HH:mm')}
+                      </p>
+                    )}
+                    {task.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                        {task.description}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+
+        <Card className="flex flex-col h-[600px]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="w-5 h-5" /> Chats Recentes
             </CardTitle>
-            <CardDescription>Últimas conversas sincronizadas.</CardDescription>
+            <CardDescription>Últimas conversas sincronizadas do Gateway.</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden">
             <ScrollArea className="h-full pr-4">
@@ -141,47 +379,6 @@ export default function Index() {
                     )}
                   </div>
                 ))}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-
-        <Card className="flex flex-col h-[500px]">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ListTodo className="w-5 h-5" /> Tarefas Ativas
-            </CardTitle>
-            <CardDescription>Resumo de tarefas detectadas pela IA.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full pr-4">
-              <div className="space-y-4">
-                {tasks.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    Nenhuma tarefa encontrada.
-                  </p>
-                )}
-                {tasks
-                  .filter((t) => t.status !== 'completed')
-                  .slice(0, 10)
-                  .map((task) => (
-                    <div
-                      key={task.id}
-                      className="flex flex-col border-b pb-4 last:border-0 last:pb-0 gap-2"
-                    >
-                      <div className="flex items-start justify-between">
-                        <p className="font-medium text-sm pr-4">{task.title}</p>
-                        <Badge variant="outline" className="text-[10px] capitalize shrink-0">
-                          {task.status === 'in_progress' ? 'Em Andamento' : 'Detectada'}
-                        </Badge>
-                      </div>
-                      {task.description && (
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {task.description}
-                        </p>
-                      )}
-                    </div>
-                  ))}
               </div>
             </ScrollArea>
           </CardContent>

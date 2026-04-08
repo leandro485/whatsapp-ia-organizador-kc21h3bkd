@@ -1,5 +1,13 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, MessageSquare, CheckSquare, Users, Settings, Bot } from 'lucide-react'
+import {
+  LayoutDashboard,
+  MessageSquare,
+  CheckSquare,
+  Users,
+  Settings,
+  Bot,
+  Calendar as CalendarIcon,
+} from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -25,6 +33,7 @@ export default function AppSidebar() {
 
   const navigation = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Calendário', path: '/calendar', icon: CalendarIcon },
     { name: 'Conversas', path: '/conversations', icon: MessageSquare, badge: unreadChats },
     { name: 'Tarefas', path: '/tasks', icon: CheckSquare, badge: pendingTasks },
     { name: 'Contatos', path: '/contacts', icon: Users },

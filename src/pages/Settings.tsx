@@ -65,6 +65,8 @@ export default function Settings() {
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [categories, setCategories] = useState<string[]>([])
   const [aiAggressiveness, setAiAggressiveness] = useState(50)
+  const [remindersEnabled, setRemindersEnabled] = useState(false)
+  const [reminderLeadTime, setReminderLeadTime] = useState(15)
 
   const [newCategory, setNewCategory] = useState('')
   const [isSyncing, setIsSyncing] = useState(false)
@@ -94,6 +96,8 @@ export default function Settings() {
       setWaConnected(settings.whatsapp_connected || false)
       setAiAggressiveness(settings.ai_aggressiveness ?? 50)
       setCategories(settings.categories || ['Geral', 'Trabalho', 'Pessoal'])
+      setRemindersEnabled(settings.reminders_enabled || false)
+      setReminderLeadTime(settings.reminder_lead_time ?? 15)
     } catch (error) {
       console.error('Failed to load settings', error)
     }
@@ -111,6 +115,8 @@ export default function Settings() {
         setWaConnected(isNowConnected)
         setAiAggressiveness(e.record.ai_aggressiveness ?? 50)
         setCategories(e.record.categories || [])
+        setRemindersEnabled(e.record.reminders_enabled || false)
+        setReminderLeadTime(e.record.reminder_lead_time ?? 15)
 
         // Handle successful connection feedback via SSE
         if (isNowConnected && isQRDialogOpen && qrStatus !== 'success') {
@@ -246,6 +252,8 @@ export default function Settings() {
       await updateUserSettings(settingsId, {
         ai_aggressiveness: aiAggressiveness,
         categories,
+        reminders_enabled: remindersEnabled,
+        reminder_lead_time: reminderLeadTime,
       })
       toast({
         title: 'Salvo com sucesso',
@@ -488,6 +496,32 @@ export default function Settings() {
               <div className="flex items-center justify-between">
                 <Label className="text-base">Resumo Diário de Conversas (Briefing)</Label>
                 <Switch defaultChecked />
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Lembretes via WhatsApp</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Receba alertas antes do vencimento das tarefas
+                  </p>
+                </div>
+                <Switch checked={remindersEnabled} onCheckedChange={setRemindersEnabled} />
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-0.5">
+                  <Label className="text-base">Antecedência do Lembrete</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Tempo antes do prazo para enviar a mensagem: {reminderLeadTime} minutos
+                  </p>
+                </div>
+                <Slider
+                  value={[reminderLeadTime]}
+                  onValueChange={(val) => setReminderLeadTime(val[0])}
+                  max={120}
+                  step={5}
+                  className="w-full"
+                  disabled={!remindersEnabled}
+                />
               </div>
             </CardContent>
           </Card>

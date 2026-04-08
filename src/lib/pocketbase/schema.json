@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-08T19:17:59.937Z",
+  "generatedAt": "2026-04-08T19:26:02.815Z",
   "collections": [
     {
       "name": "users",
@@ -167,6 +167,13 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "priority",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["low", "medium", "high"]
         }
       ],
       "indexes": []
@@ -220,6 +227,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "reminders_enabled",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "reminder_lead_time",
+          "type": "number",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": []

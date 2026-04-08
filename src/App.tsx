@@ -6,6 +6,7 @@ import { AppProvider } from '@/stores/main'
 import { ThemeProvider } from '@/components/theme-provider'
 import Layout from '@/components/Layout'
 import Index from '@/pages/Index'
+import CalendarPage from '@/pages/Calendar'
 import Conversations from '@/pages/Conversations'
 import Tasks from '@/pages/Tasks'
 import Contacts from '@/pages/Contacts'
@@ -35,6 +36,7 @@ const AppRoutes = () => (
       }
     >
       <Route path="/" element={<Index />} />
+      <Route path="/calendar" element={<CalendarPage />} />
       <Route path="/conversations" element={<Conversations />} />
       <Route path="/tasks" element={<Tasks />} />
       <Route path="/contacts" element={<Contacts />} />
