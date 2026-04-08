@@ -18,6 +18,8 @@ import { Calendar } from '@/components/ui/calendar'
 import { useRealtime } from '@/hooks/use-realtime'
 import { getTasks } from '@/services/tasks'
 import { getChats } from '@/services/chats'
+import { ensureUserSettings } from '@/services/settings'
+import { useAuth } from '@/hooks/use-auth'
 import {
   MessageSquare,
   Clock,
@@ -42,14 +44,34 @@ export default function Index() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
   const { toast } = useToast()
+  const { user } = useAuth()
 
   const loadData = async () => {
     try {
+      if (user?.id) {
+        try {
+          await ensureUserSettings(user.id)
+        } catch (settingsErr) {
+          console.error('Failed to initialize settings:', settingsErr)
+          toast({
+            variant: 'destructive',
+            title: 'Aviso',
+            description:
+              'Não foi possível carregar as configurações. Algumas funcionalidades podem estar indisponíveis.',
+          })
+        }
+      }
+
       const [fetchedTasks, fetchedChats] = await Promise.all([getTasks(), getChats()])
       setTasks(fetchedTasks)
       setChats(fetchedChats)
     } catch (err) {
       console.error('Failed to load dashboard data', err)
+      toast({
+        variant: 'destructive',
+        title: 'Erro de Conexão',
+        description: 'Ocorreu um problema ao carregar os dados do painel.',
+      })
     }
   }
 
