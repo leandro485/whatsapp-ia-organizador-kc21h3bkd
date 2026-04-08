@@ -18,22 +18,32 @@ export const updateUserSettings = async (id: string, data: any) => {
 }
 
 export const createUserSettings = async (data: any) => {
-  return pb.collection('user_settings').create(data)
+  // Dynamically populate with current authenticated user's ID to satisfy API rules
+  const payload = {
+    ...data,
+    user: pb.authStore.record?.id || data.user,
+  }
+  return pb.collection('user_settings').create(payload)
 }
 
 // Dictionary lock to prevent concurrent initialization requests per user
 const ensurePromises: Record<string, Promise<any>> = {}
 
 export const ensureUserSettings = async (userId: string) => {
-  // If a request is already in flight for this user, return the same promise to ensure idempotency
-  if (ensurePromises[userId]) {
-    return ensurePromises[userId]
+  const currentUserId = pb.authStore.record?.id || userId
+  if (!currentUserId) {
+    throw new Error('User ID is required to ensure settings')
   }
 
-  ensurePromises[userId] = (async () => {
+  // If a request is already in flight for this user, return the same promise to ensure idempotency
+  if (ensurePromises[currentUserId]) {
+    return ensurePromises[currentUserId]
+  }
+
+  ensurePromises[currentUserId] = (async () => {
     // Exact schema alignment for full payload consistency
     const defaultSettings = {
-      user: userId,
+      user: currentUserId,
       whatsapp_connected: false,
       ai_aggressiveness: 50,
       categories: ['Trabalho', 'Família', 'Financeiro', 'Vendas'],
@@ -43,7 +53,7 @@ export const ensureUserSettings = async (userId: string) => {
 
     try {
       // 1. Pre-creation Check: verify if a record already exists
-      const existing = await getUserSettings(userId)
+      const existing = await getUserSettings(currentUserId)
 
       if (existing) {
         // 2. Conditional Logic: Skip create, perform an update (PATCH) if necessary
@@ -84,7 +94,7 @@ export const ensureUserSettings = async (userId: string) => {
             'Failed to create settings (400), checking for concurrent creation...',
             createError?.response,
           )
-          const concurrentExisting = await getUserSettings(userId)
+          const concurrentExisting = await getUserSettings(currentUserId)
           if (concurrentExisting) return concurrentExisting
         }
         throw createError
@@ -100,9 +110,9 @@ export const ensureUserSettings = async (userId: string) => {
   })()
 
   try {
-    return await ensurePromises[userId]
+    return await ensurePromises[currentUserId]
   } finally {
     // Clear lock after resolution
-    delete ensurePromises[userId]
+    delete ensurePromises[currentUserId]
   }
 }

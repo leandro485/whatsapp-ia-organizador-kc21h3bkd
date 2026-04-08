@@ -51,18 +51,23 @@ export default function Index() {
     try {
       // Execute non-blocking initializations concurrently with graceful failure handling
       // to ensure UI stability and prevent the black screen crash
+      let hasError = false
       const [fetchedTasks, fetchedChats] = await Promise.all([
         getTasks().catch((err) => {
           console.error('Failed to load tasks', err)
+          hasError = true
           return []
         }),
         getChats().catch((err) => {
           console.error('Failed to load chats', err)
+          hasError = true
           return []
         }),
         user?.id
           ? ensureUserSettings(user.id).catch((err) => {
               console.error('Non-fatal error ensuring settings:', err)
+              // Setting fallback is handled by ensureUserSettings internally,
+              // but we catch here as a final safety net.
               return null
             })
           : Promise.resolve(null),
@@ -70,12 +75,20 @@ export default function Index() {
 
       setTasks(fetchedTasks || [])
       setChats(fetchedChats || [])
+
+      if (hasError) {
+        toast({
+          variant: 'destructive',
+          title: 'Erro de Sincronização',
+          description: 'Não foi possível carregar alguns dados. Verifique sua conexão.',
+        })
+      }
     } catch (err) {
       console.error('Failed to load dashboard data', err)
       toast({
         variant: 'destructive',
         title: 'Erro de Conexão',
-        description: 'Ocorreu um problema ao carregar os dados do painel.',
+        description: 'Ocorreu um problema ao inicializar o painel.',
       })
     } finally {
       setInitialLoading(false)
