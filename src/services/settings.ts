@@ -56,36 +56,10 @@ export const ensureUserSettings = async (userId: string) => {
       const existing = await getUserSettings(currentUserId)
 
       if (existing) {
-        // 2. Conditional Logic: Skip create, perform an update (PATCH) if necessary
-        let needsUpdate = false
-        const updateData: Record<string, any> = {}
-
-        if (existing.reminders_enabled === undefined) {
-          updateData.reminders_enabled = defaultSettings.reminders_enabled
-          needsUpdate = true
-        }
-        if (existing.reminder_lead_time === undefined) {
-          updateData.reminder_lead_time = defaultSettings.reminder_lead_time
-          needsUpdate = true
-        }
-        if (!existing.categories || !Array.isArray(existing.categories)) {
-          updateData.categories = defaultSettings.categories
-          needsUpdate = true
-        }
-
-        if (needsUpdate) {
-          try {
-            return await updateUserSettings(existing.id, updateData)
-          } catch (updateError) {
-            console.error('Failed to update existing settings:', updateError)
-            return existing
-          }
-        }
-
         return existing
       }
 
-      // 3. Conditional creation with validated payload to avoid HTTP 400
+      // 2. Creation with validated payload to avoid HTTP 400
       try {
         return await createUserSettings(defaultSettings)
       } catch (createError) {
