@@ -18,9 +18,10 @@ export const updateUserSettings = async (id: string, data: any) => {
 }
 
 export const createUserSettings = async (data: any) => {
+  const currentUserId = pb.authStore.record?.id || data.user
   const payload = {
     ...data,
-    user: pb.authStore.record?.id || data.user,
+    user: currentUserId,
   }
   return pb.collection('user_settings').create(payload)
 }
@@ -30,7 +31,8 @@ const ensurePromises: Record<string, Promise<any>> = {}
 export const ensureUserSettings = async (userId: string) => {
   const currentUserId = pb.authStore.record?.id || userId
   if (!currentUserId) {
-    throw new Error('User ID is required to ensure settings')
+    console.warn('User ID is required to ensure settings')
+    return null
   }
 
   if (ensurePromises[currentUserId]) {
@@ -56,16 +58,23 @@ export const ensureUserSettings = async (userId: string) => {
 
       try {
         return await createUserSettings(defaultSettings)
-      } catch (createError) {
-        if (createError instanceof ClientResponseError && createError.status === 400) {
-          console.warn(
-            'Failed to create settings (400), checking for concurrent creation...',
-            createError?.response,
-          )
+      } catch (createError: any) {
+        console.warn(
+          'Failed to create settings, checking for concurrent creation...',
+          createError instanceof ClientResponseError ? createError.response : createError,
+        )
+        try {
           const concurrentExisting = await getUserSettings(currentUserId)
           if (concurrentExisting) return concurrentExisting
+        } catch (fallbackError) {
+          console.warn('Fallback fetch also failed', fallbackError)
         }
-        throw createError
+
+        console.error('Failed to create or fetch user settings. Using local defaults.')
+        return {
+          id: 'local-default',
+          ...defaultSettings,
+        }
       }
     } catch (error) {
       console.error('Failed to ensure user settings. Using local defaults.', error)
