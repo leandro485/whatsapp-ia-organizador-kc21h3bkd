@@ -49,10 +49,17 @@ export default function Index() {
 
   const loadData = async () => {
     try {
-      // Execute non-blocking initializations concurrently to ensure index page stability
+      // Execute non-blocking initializations concurrently with graceful failure handling
+      // to ensure UI stability and prevent the black screen crash
       const [fetchedTasks, fetchedChats] = await Promise.all([
-        getTasks(),
-        getChats(),
+        getTasks().catch((err) => {
+          console.error('Failed to load tasks', err)
+          return []
+        }),
+        getChats().catch((err) => {
+          console.error('Failed to load chats', err)
+          return []
+        }),
         user?.id
           ? ensureUserSettings(user.id).catch((err) => {
               console.error('Non-fatal error ensuring settings:', err)
@@ -61,8 +68,8 @@ export default function Index() {
           : Promise.resolve(null),
       ])
 
-      setTasks(fetchedTasks)
-      setChats(fetchedChats)
+      setTasks(fetchedTasks || [])
+      setChats(fetchedChats || [])
     } catch (err) {
       console.error('Failed to load dashboard data', err)
       toast({

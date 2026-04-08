@@ -21,17 +21,17 @@ export const createUserSettings = async (data: any) => {
   return pb.collection('user_settings').create(data)
 }
 
-// Module-level lock to prevent concurrent initialization requests
-let ensurePromise: Promise<any> | null = null
+// Dictionary lock to prevent concurrent initialization requests per user
+const ensurePromises: Record<string, Promise<any>> = {}
 
 export const ensureUserSettings = async (userId: string) => {
-  // If a request is already in flight, return the same promise to ensure idempotency
-  if (ensurePromise) {
-    return ensurePromise
+  // If a request is already in flight for this user, return the same promise to ensure idempotency
+  if (ensurePromises[userId]) {
+    return ensurePromises[userId]
   }
 
-  ensurePromise = (async () => {
-    // Exact schema alignment for payload
+  ensurePromises[userId] = (async () => {
+    // Exact schema alignment for full payload consistency
     const defaultSettings = {
       user: userId,
       whatsapp_connected: false,
@@ -42,24 +42,51 @@ export const ensureUserSettings = async (userId: string) => {
     }
 
     try {
-      // 1. Check before create
+      // 1. Pre-creation Check: verify if a record already exists
       const existing = await getUserSettings(userId)
-      if (existing) return existing
 
+      if (existing) {
+        // 2. Conditional Logic: Skip create, perform an update (PATCH) if necessary
+        let needsUpdate = false
+        const updateData: Record<string, any> = {}
+
+        if (existing.reminders_enabled === undefined) {
+          updateData.reminders_enabled = defaultSettings.reminders_enabled
+          needsUpdate = true
+        }
+        if (existing.reminder_lead_time === undefined) {
+          updateData.reminder_lead_time = defaultSettings.reminder_lead_time
+          needsUpdate = true
+        }
+        if (!existing.categories || !Array.isArray(existing.categories)) {
+          updateData.categories = defaultSettings.categories
+          needsUpdate = true
+        }
+
+        if (needsUpdate) {
+          try {
+            return await updateUserSettings(existing.id, updateData)
+          } catch (updateError) {
+            console.error('Failed to update existing settings:', updateError)
+            return existing
+          }
+        }
+
+        return existing
+      }
+
+      // 3. Conditional creation with validated payload to avoid HTTP 400
       try {
-        // 2. Conditional creation with validated payload
         return await createUserSettings(defaultSettings)
       } catch (createError) {
-        // If creation fails with a 400 error (e.g., unique constraint on user), attempt to fetch again
         if (createError instanceof ClientResponseError && createError.status === 400) {
           console.warn(
             'Failed to create settings (400), checking for concurrent creation...',
-            createError,
+            createError?.response,
           )
           const concurrentExisting = await getUserSettings(userId)
           if (concurrentExisting) return concurrentExisting
         }
-
         throw createError
       }
     } catch (error) {
@@ -73,10 +100,9 @@ export const ensureUserSettings = async (userId: string) => {
   })()
 
   try {
-    const result = await ensurePromise
-    return result
+    return await ensurePromises[userId]
   } finally {
     // Clear lock after resolution
-    ensurePromise = null
+    delete ensurePromises[userId]
   }
 }
