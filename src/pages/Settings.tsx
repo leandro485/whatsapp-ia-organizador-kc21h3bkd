@@ -142,9 +142,9 @@ export default function Settings() {
     try {
       if (isRetry) {
         // Clear any stale session on the backend before generating a new QR
-        await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' }).catch(() => {})
+        await pb.send('/backend/v1/whatsapp_disconnect', { method: 'POST' }).catch(() => {})
       }
-      const res = await pb.send<{ qr: string }>('/backend/v1/whatsapp/qr', { method: 'GET' })
+      const res = await pb.send<{ qr: string }>('/backend/v1/whatsapp_qr', { method: 'GET' })
       if (res && res.qr) {
         setQrData(res.qr)
         setQrStatus('ready')
@@ -176,7 +176,7 @@ export default function Settings() {
       return
     }
     try {
-      await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' }).catch(() => {})
+      await pb.send('/backend/v1/whatsapp_disconnect', { method: 'POST' }).catch(() => {})
     } finally {
       setIsQRDialogOpen(false)
       setQrStatus('idle')
@@ -228,7 +228,7 @@ export default function Settings() {
     if (!settingsId) return
     setIsDisconnecting(true)
     try {
-      await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' })
+      await pb.send('/backend/v1/whatsapp_disconnect', { method: 'POST' })
       await updateUserSettings(settingsId, { whatsapp_connected: false })
       setLastSync(null)
       toast({ title: 'Desconectado', description: 'Sessão do WhatsApp encerrada e dados limpos.' })
@@ -601,7 +601,7 @@ export default function Settings() {
                 size="sm"
                 title="Dica: Segure ALT ao clicar para simular falha"
               >
-                Simular Leitura
+                Simular Conexão
               </Button>
             )}
           </div>

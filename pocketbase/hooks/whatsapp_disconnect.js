@@ -1,17 +1,10 @@
 routerAdd(
   'POST',
-  '/backend/v1/whatsapp/disconnect',
+  '/backend/v1/whatsapp_disconnect',
   (e) => {
-    const userId = e.auth.id
-    try {
-      const settings = $app.findFirstRecordByFilter('user_settings', 'user = {:userId}', { userId })
-      settings.set('whatsapp_connected', false)
-      $app.save(settings)
-      return e.json(200, { success: true, message: 'Session purged and disconnected' })
-    } catch (err) {
-      // If no settings exist, the user is technically already disconnected
-      return e.json(200, { success: true, message: 'No active session found' })
-    }
+    // Em um cenário real, isso enviaria o comando de desconexão para o gateway
+    // para encerrar a sessão do WhatsApp ativa.
+    return e.json(200, { success: true, message: 'Sessão do WhatsApp encerrada com sucesso.' })
   },
   $apis.requireAuth(),
 )
