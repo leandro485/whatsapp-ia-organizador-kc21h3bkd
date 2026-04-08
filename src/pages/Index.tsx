@@ -18,7 +18,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { useRealtime } from '@/hooks/use-realtime'
 import { getTasks } from '@/services/tasks'
 import { getChats } from '@/services/chats'
-import { ensureUserSettings } from '@/services/settings'
+import { ensureUserSettings, getUserSettings } from '@/services/settings'
 import { useAuth } from '@/hooks/use-auth'
 import {
   MessageSquare,
@@ -55,7 +55,15 @@ export default function Index() {
         try {
           await ensureUserSettings(user.id)
         } catch (err) {
-          console.error('Non-fatal error ensuring settings:', err)
+          console.error('Error ensuring settings:', err)
+          try {
+            const existing = await getUserSettings(user.id)
+            if (!existing) {
+              console.warn('No settings found on fallback fetch.')
+            }
+          } catch (fallbackErr) {
+            console.error('Fallback fetch failed:', fallbackErr)
+          }
         }
       }
 

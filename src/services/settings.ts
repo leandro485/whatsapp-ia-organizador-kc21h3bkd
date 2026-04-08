@@ -3,11 +3,12 @@ import { ClientResponseError } from 'pocketbase'
 
 export const getUserSettings = async (userId: string) => {
   try {
-    return await pb.collection('user_settings').getFirstListItem(`user="${userId}"`)
+    // 1. Pre-creation Check: using getList to avoid 404 errors if empty
+    const result = await pb
+      .collection('user_settings')
+      .getList(1, 1, { filter: `user="${userId}"` })
+    return result.items.length > 0 ? result.items[0] : null
   } catch (error) {
-    if (error instanceof ClientResponseError && error.status === 404) {
-      return null
-    }
     console.error('Error fetching user settings:', error)
     throw error // Throw to prevent accidental creation when fetch fails
   }
@@ -68,9 +69,15 @@ export const ensureUserSettings = async (userId: string) => {
 
         if (needsUpdate) {
           const updatePayload = {
-            ai_aggressiveness: existing.ai_aggressiveness ?? defaultSettings.ai_aggressiveness,
-            reminders_enabled: existing.reminders_enabled ?? defaultSettings.reminders_enabled,
-            reminder_lead_time: existing.reminder_lead_time ?? defaultSettings.reminder_lead_time,
+            ai_aggressiveness: Number(
+              existing.ai_aggressiveness ?? defaultSettings.ai_aggressiveness,
+            ),
+            reminders_enabled: Boolean(
+              existing.reminders_enabled ?? defaultSettings.reminders_enabled,
+            ),
+            reminder_lead_time: Number(
+              existing.reminder_lead_time ?? defaultSettings.reminder_lead_time,
+            ),
             categories:
               Array.isArray(existing.categories) && existing.categories.length > 0
                 ? existing.categories
@@ -89,7 +96,14 @@ export const ensureUserSettings = async (userId: string) => {
 
       // 2. Creation with validated payload to avoid HTTP 400
       try {
-        return await createUserSettings(defaultSettings)
+        return await createUserSettings({
+          user: currentUserId,
+          whatsapp_connected: Boolean(defaultSettings.whatsapp_connected),
+          ai_aggressiveness: Number(defaultSettings.ai_aggressiveness),
+          categories: defaultSettings.categories,
+          reminders_enabled: Boolean(defaultSettings.reminders_enabled),
+          reminder_lead_time: Number(defaultSettings.reminder_lead_time),
+        })
       } catch (createError) {
         if (createError instanceof ClientResponseError && createError.status === 400) {
           console.warn(
