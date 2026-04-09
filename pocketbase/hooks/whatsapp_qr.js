@@ -6,7 +6,9 @@ routerAdd(
     const token = ($secrets.get('ZAPI_TOKEN') || '').trim()
 
     if (!instanceId || !token) {
-      throw new BadRequestError('Z-API credentials missing')
+      throw new BadRequestError(
+        'Credenciais do Z-API não configuradas (ZAPI_INSTANCE_ID ou ZAPI_TOKEN).',
+      )
     }
 
     const res = $http.send({
@@ -15,10 +17,17 @@ routerAdd(
     })
 
     if (res.statusCode !== 200) {
-      if (res.statusCode === 400) {
-        throw new BadRequestError('ZAPI_400')
-      }
-      throw new BadRequestError('Failed to fetch QR code from Z-API: ' + res.statusCode)
+      let errorMsg = 'Falha ao obter QR code do Z-API.'
+      try {
+        if (res.json && res.json.error) {
+          errorMsg = res.json.error
+        } else if (res.json && res.json.message) {
+          errorMsg = res.json.message
+        } else if (res.json) {
+          errorMsg = JSON.stringify(res.json)
+        }
+      } catch (err) {}
+      throw new BadRequestError(errorMsg || 'ZAPI Error: ' + res.statusCode)
     }
 
     const qrData = res.json.value || res.json.qr || ''

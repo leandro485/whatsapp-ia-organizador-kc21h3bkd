@@ -8,6 +8,16 @@ routerAdd('POST', '/backend/v1/webhook/whatsapp', (e) => {
     return e.json(400, { error: 'Missing required fields' })
   }
 
+  try {
+    const settings = $app.findFirstRecordByData('user_settings', 'user', userId)
+    if (!settings.get('whatsapp_connected')) {
+      settings.set('whatsapp_connected', true)
+      $app.save(settings)
+    }
+  } catch (err) {
+    // Ignored
+  }
+
   let chat
   try {
     chat = $app.findFirstRecordByFilter('chats', 'owner = {:userId} && name = {:contactName}', {

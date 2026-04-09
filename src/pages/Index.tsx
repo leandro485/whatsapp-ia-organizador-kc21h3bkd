@@ -47,13 +47,18 @@ export default function Index() {
   const { toast } = useToast()
   const { user } = useAuth()
 
+  const [waConnected, setWaConnected] = useState(false)
+
   const loadData = async () => {
     try {
       let hasError = false
 
       if (user?.id) {
         try {
-          await ensureUserSettings(user.id)
+          const settings = await ensureUserSettings(user.id)
+          if (settings) {
+            setWaConnected(settings.whatsapp_connected || false)
+          }
         } catch (err) {
           console.error('Error ensuring settings:', err)
         }
@@ -100,6 +105,15 @@ export default function Index() {
 
   useRealtime('tasks', () => loadData())
   useRealtime('chats', () => loadData())
+  useRealtime(
+    'user_settings',
+    (e) => {
+      if (user && e.record.user === user.id) {
+        setWaConnected(e.record.whatsapp_connected || false)
+      }
+    },
+    !!user,
+  )
 
   const handleTogglePin = async (chat: any) => {
     try {
@@ -189,10 +203,19 @@ export default function Index() {
 
   return (
     <div className="flex flex-col gap-6 h-full pb-8">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-3">
             Painel Analytics
+            <Badge
+              variant={waConnected ? 'default' : 'destructive'}
+              className={cn(
+                'h-6 pointer-events-none',
+                waConnected ? 'bg-green-500 text-white' : '',
+              )}
+            >
+              {waConnected ? 'WhatsApp Conectado' : 'WhatsApp Desconectado'}
+            </Badge>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Visualize sua produtividade e o volume de mensagens gerenciados pela IA.

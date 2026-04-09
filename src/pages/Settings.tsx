@@ -156,9 +156,13 @@ export default function Settings() {
     } catch (e: any) {
       setQrStatus('error')
       const msg = getErrorMessage(e)
-      if (msg.includes('ZAPI_400') || msg.includes('400')) {
+      if (msg.includes('Credenciais do Z-API não configuradas')) {
         setQrErrorMessage(
-          'A instância pode estar ocupada ou as credenciais estão incorretas. Tente limpar a sessão.',
+          'Credenciais Z-API (ZAPI_INSTANCE_ID e ZAPI_TOKEN) não configuradas no painel de Secrets.',
+        )
+      } else if (msg.includes('400') || msg.includes('ZAPI_400') || msg.includes('ocupada')) {
+        setQrErrorMessage(
+          `Erro no Gateway Z-API: ${msg}. A instância pode estar ocupada ou as credenciais estão incorretas. Tente limpar a sessão.`,
         )
       } else {
         setQrErrorMessage(
@@ -184,9 +188,8 @@ export default function Settings() {
         try {
           const res = await pb.send('/backend/v1/whatsapp/status', { method: 'GET' })
           if (res.connected || res.status === 'CONNECTED') {
-            if (settingsId) {
-              await updateUserSettings(settingsId, { whatsapp_connected: true })
-            }
+            // The backend hook already updates whatsapp_connected in user_settings
+            // SSE will pick this up, but we can set success directly here to be responsive.
             setQrStatus('success')
           }
         } catch (error) {

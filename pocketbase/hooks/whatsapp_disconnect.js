@@ -6,7 +6,9 @@ routerAdd(
     const token = ($secrets.get('ZAPI_TOKEN') || '').trim()
 
     if (!instanceId || !token) {
-      throw new BadRequestError('Z-API credentials missing')
+      throw new BadRequestError(
+        'Credenciais do Z-API não configuradas (ZAPI_INSTANCE_ID ou ZAPI_TOKEN).',
+      )
     }
 
     try {
