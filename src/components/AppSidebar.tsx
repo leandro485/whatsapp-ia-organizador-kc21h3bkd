@@ -21,12 +21,31 @@ import {
   SidebarMenuItem,
   SidebarMenuBadge,
 } from '@/components/ui/sidebar'
+import { useEffect, useState } from 'react'
 import { useAppStore, ChatCategory } from '@/stores/main'
+import pb from '@/lib/pocketbase/client'
 
 export default function AppSidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { chats, tasks, categoryFilter, setCategoryFilter, waConnected } = useAppStore()
+  const [configError, setConfigError] = useState(false)
+
+  useEffect(() => {
+    const checkConfig = async () => {
+      try {
+        await pb.send('/backend/v1/whatsapp/status', { method: 'GET' })
+        setConfigError(false)
+      } catch (err: any) {
+        if (err.response?.error === 'CREDENTIALS_MISSING') {
+          setConfigError(true)
+        } else {
+          setConfigError(false)
+        }
+      }
+    }
+    checkConfig()
+  }, [waConnected])
 
   const unreadChats = chats.reduce((acc, chat) => acc + chat.unread, 0)
   const pendingTasks = tasks.filter((t) => t.status === 'Detectada').length
@@ -112,15 +131,21 @@ export default function AppSidebar() {
       <SidebarFooter className="border-t p-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <div className="relative flex h-3 w-3">
-            {waConnected && (
+            {waConnected && !configError && (
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
             )}
             <span
-              className={`relative inline-flex rounded-full h-3 w-3 ${waConnected ? 'bg-green-500' : 'bg-red-500'}`}
+              className={`relative inline-flex rounded-full h-3 w-3 ${
+                waConnected ? 'bg-green-500' : configError ? 'bg-yellow-500' : 'bg-red-500'
+              }`}
             ></span>
           </div>
           <span className="font-medium text-foreground">
-            {waConnected ? 'WhatsApp Conectado' : 'Desconectado'}
+            {waConnected
+              ? 'WhatsApp Conectado'
+              : configError
+                ? 'Configuração Pendente'
+                : 'Desconectado'}
           </span>
         </div>
       </SidebarFooter>

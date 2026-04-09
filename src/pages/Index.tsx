@@ -70,7 +70,7 @@ export default function Index() {
 
         try {
           const statusRes = await pb.send('/backend/v1/whatsapp/status', { method: 'GET' })
-          if (statusRes.status === 'unconfigured' || statusRes.status === 'error') {
+          if (statusRes.status === 'error') {
             setConfigError(true)
             setWaConnected(false)
           } else if (statusRes.connected === false) {
@@ -80,9 +80,13 @@ export default function Index() {
             setConfigError(false)
             setWaConnected(true)
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error('Failed to get WhatsApp status:', err)
-          setConfigError(true)
+          if (err.response?.error === 'CREDENTIALS_MISSING') {
+            setConfigError(true)
+          } else {
+            setConfigError(false)
+          }
           setWaConnected(false)
         }
       }
@@ -250,13 +254,21 @@ export default function Index() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-3">
             Painel Analytics
             <Badge
-              variant={waConnected ? 'default' : 'destructive'}
+              variant={waConnected ? 'default' : configError ? 'outline' : 'destructive'}
               className={cn(
                 'h-6 pointer-events-none',
-                waConnected ? 'bg-green-500 text-white' : '',
+                waConnected
+                  ? 'bg-green-500 text-white'
+                  : configError
+                    ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
+                    : '',
               )}
             >
-              {waConnected ? 'WhatsApp Conectado' : 'WhatsApp Desconectado'}
+              {waConnected
+                ? 'WhatsApp Conectado'
+                : configError
+                  ? 'Configuração Necessária'
+                  : 'WhatsApp Desconectado'}
             </Badge>
           </h1>
           <p className="text-sm text-muted-foreground mt-1">

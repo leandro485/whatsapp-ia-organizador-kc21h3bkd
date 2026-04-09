@@ -90,6 +90,7 @@ export default function Settings() {
       setConfigError(false)
     } catch (err: any) {
       if (
+        err.response?.error === 'CREDENTIALS_MISSING' ||
         err.message?.includes('Configuração da Z-API ausente') ||
         err.message?.includes('token de cliente não está configurado') ||
         err.message?.includes('your client-token or instance-id is not configured')
@@ -188,6 +189,15 @@ export default function Settings() {
           title: 'Configuração Ausente',
           description: errorText,
         })
+      } else if (e.response?.error === 'CREDENTIALS_MISSING') {
+        const errorText =
+          'Credenciais ausentes. Por favor, configure ZAPI_TOKEN e ZAPI_INSTANCE_ID no painel de Backend Secrets.'
+        setQrErrorMessage(errorText)
+        toast({
+          variant: 'destructive',
+          title: 'Configuração Ausente',
+          description: errorText,
+        })
       } else if (msg.includes('400') || msg.includes('ZAPI_400') || msg.includes('ocupada')) {
         setQrErrorMessage(
           `Erro no Gateway Z-API: ${msg}. A instância pode estar ocupada ou as credenciais estão incorretas. Tente limpar a sessão.`,
@@ -243,15 +253,6 @@ export default function Settings() {
   }
 
   const handleConnectClick = () => {
-    if (configError) {
-      toast({
-        variant: 'destructive',
-        title: 'Configuração Ausente',
-        description:
-          'Erro: seu token de cliente não está configurado. Verifique as Secrets no painel do Skip Cloud.',
-      })
-      return
-    }
     setIsQRDialogOpen(true)
     generateQR(false)
   }
@@ -307,7 +308,10 @@ export default function Settings() {
       }
     } catch (err: any) {
       const msg = getErrorMessage(err)
-      if (msg.includes('your client-token or instance-id is not configured')) {
+      if (
+        err.response?.error === 'CREDENTIALS_MISSING' ||
+        msg.includes('your client-token or instance-id is not configured')
+      ) {
         toast({
           title: 'Configuração Ausente',
           description:

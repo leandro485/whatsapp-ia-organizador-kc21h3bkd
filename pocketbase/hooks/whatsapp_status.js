@@ -17,7 +17,10 @@ routerAdd(
           }
         } catch (err) {}
       }
-      return e.json(200, { connected: false, status: 'unconfigured' })
+      return e.json(400, {
+        error: 'CREDENTIALS_MISSING',
+        message: 'As credenciais ZAPI_TOKEN e ZAPI_INSTANCE_ID não foram encontradas nos Secrets.',
+      })
     }
 
     let res

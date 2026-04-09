@@ -6,7 +6,10 @@ routerAdd(
     const token = ($secrets.get('ZAPI_TOKEN') || '').trim()
 
     if (!instanceId || !token) {
-      throw new BadRequestError('your client-token or instance-id is not configured')
+      return e.json(400, {
+        error: 'CREDENTIALS_MISSING',
+        message: 'As credenciais ZAPI_TOKEN e ZAPI_INSTANCE_ID não foram encontradas nos Secrets.',
+      })
     }
 
     const res = $http.send({
