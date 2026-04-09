@@ -142,21 +142,22 @@ export default function Settings() {
     setQrErrorMessage('')
     setQrTimeLeft(QR_LIFESPAN)
     try {
-      if (isRetry) {
+      if (isRetry && waConnected) {
         // Clear any stale session on the backend before generating a new QR
-        await pb.send('/backend/v1/whatsapp_disconnect', { method: 'POST' }).catch(() => {})
+        await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' }).catch(() => {})
       }
-      const res = await pb.send<{ qr: string }>('/backend/v1/whatsapp_qr', { method: 'GET' })
+      const res = await pb.send<{ qr: string }>('/backend/v1/whatsapp/qr', { method: 'GET' })
       if (res && res.qr) {
         setQrData(res.qr)
         setQrStatus('ready')
       } else {
         throw new Error('Invalid QR response')
       }
-    } catch (e) {
+    } catch (e: any) {
       setQrStatus('error')
+      const msg = getErrorMessage(e)
       setQrErrorMessage(
-        'Falha ao obter QR Code válido do Gateway. Verifique sua conexão e tente novamente.',
+        msg || 'Falha ao obter QR Code válido do Gateway. Verifique sua conexão e tente novamente.',
       )
     }
   }, [])
@@ -165,12 +166,29 @@ export default function Settings() {
     let timer: NodeJS.Timeout
     if (isQRDialogOpen && qrStatus === 'ready' && qrTimeLeft > 0) {
       timer = setTimeout(() => setQrTimeLeft((prev) => prev - 1), 1000)
-    } else if (qrTimeLeft === 0 && qrStatus === 'ready' && isQRDialogOpen) {
-      // Automatically request a new QR code when it expires
-      generateQR(true)
     }
     return () => clearTimeout(timer)
-  }, [isQRDialogOpen, qrStatus, qrTimeLeft, generateQR])
+  }, [isQRDialogOpen, qrStatus, qrTimeLeft])
+
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout
+    if (isQRDialogOpen && qrStatus === 'ready') {
+      pollInterval = setInterval(async () => {
+        try {
+          const res = await pb.send('/backend/v1/whatsapp/status', { method: 'GET' })
+          if (res.connected || res.status === 'CONNECTED') {
+            if (settingsId) {
+              await updateUserSettings(settingsId, { whatsapp_connected: true })
+            }
+            setQrStatus('success')
+          }
+        } catch (error) {
+          console.error('Failed to check status', error)
+        }
+      }, 5000)
+    }
+    return () => clearInterval(pollInterval)
+  }, [isQRDialogOpen, qrStatus, settingsId])
 
   const handleCancelPairing = async () => {
     if (waConnected || qrStatus === 'success') {
@@ -178,7 +196,7 @@ export default function Settings() {
       return
     }
     try {
-      await pb.send('/backend/v1/whatsapp_disconnect', { method: 'POST' }).catch(() => {})
+      await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' }).catch(() => {})
     } finally {
       setIsQRDialogOpen(false)
       setQrStatus('idle')
@@ -230,8 +248,7 @@ export default function Settings() {
     if (!settingsId) return
     setIsDisconnecting(true)
     try {
-      await pb.send('/backend/v1/whatsapp_disconnect', { method: 'POST' })
-      await updateUserSettings(settingsId, { whatsapp_connected: false })
+      await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' })
       setLastSync(null)
       toast({ title: 'Desconectado', description: 'Sessão do WhatsApp encerrada e dados limpos.' })
     } catch (err) {
@@ -613,10 +630,14 @@ export default function Settings() {
                 </div>
               )}
 
-              {qrStatus === 'ready' && (
+              {qrStatus === 'ready' && qrTimeLeft > 0 && (
                 <div className="flex flex-col items-center space-y-4 animate-in fade-in duration-500">
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=0&data=${encodeURIComponent(qrData)}`}
+                    src={
+                      qrData.startsWith('http') || qrData.startsWith('data:')
+                        ? qrData
+                        : `https://api.qrserver.com/v1/create-qr-code/?size=512x512&margin=0&data=${encodeURIComponent(qrData)}`
+                    }
                     alt="QR Code"
                     className="w-56 h-56 object-contain rounded"
                   />
@@ -626,6 +647,24 @@ export default function Settings() {
                       Aguardando validação do aparelho... (Expira em {qrTimeLeft}s)
                     </p>
                   </div>
+                </div>
+              )}
+
+              {qrStatus === 'ready' && qrTimeLeft === 0 && (
+                <div className="flex flex-col items-center w-full space-y-4 animate-in fade-in duration-500">
+                  <div className="p-4 rounded-full bg-muted">
+                    <RefreshCw className="w-10 h-10 text-muted-foreground" />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="font-medium text-lg">QR Code Expirado</p>
+                    <p className="text-sm text-muted-foreground">
+                      Por segurança, o código expirou.
+                    </p>
+                  </div>
+                  <Button onClick={() => generateQR(true)} className="w-full">
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Gerar Novo Código
+                  </Button>
                 </div>
               )}
             </div>

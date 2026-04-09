@@ -1,9 +1,30 @@
 routerAdd(
   'POST',
-  '/backend/v1/whatsapp_disconnect',
+  '/backend/v1/whatsapp/disconnect',
   (e) => {
-    // Em um cenário real, isso enviaria o comando de desconexão para o gateway
-    // para encerrar a sessão do WhatsApp ativa.
+    const instanceId = $secrets.get('ZAPI_INSTANCE_ID')
+    const token = $secrets.get('ZAPI_TOKEN')
+
+    if (!instanceId || !token) {
+      throw new BadRequestError('Z-API credentials missing')
+    }
+
+    $http.send({
+      url: `https://api.z-api.io/instances/${instanceId}/token/${token}/disconnect`,
+      method: 'GET',
+    })
+
+    const userId = e.auth?.id
+    if (userId) {
+      try {
+        const settings = $app.findFirstRecordByData('user_settings', 'user', userId)
+        settings.set('whatsapp_connected', false)
+        $app.save(settings)
+      } catch (err) {
+        // Ignored
+      }
+    }
+
     return e.json(200, { success: true, message: 'Sessão do WhatsApp encerrada com sucesso.' })
   },
   $apis.requireAuth(),
