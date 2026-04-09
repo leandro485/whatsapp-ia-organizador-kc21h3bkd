@@ -2,17 +2,21 @@ routerAdd(
   'POST',
   '/backend/v1/whatsapp/disconnect',
   (e) => {
-    const instanceId = $secrets.get('ZAPI_INSTANCE_ID')
-    const token = $secrets.get('ZAPI_TOKEN')
+    const instanceId = ($secrets.get('ZAPI_INSTANCE_ID') || '').trim()
+    const token = ($secrets.get('ZAPI_TOKEN') || '').trim()
 
     if (!instanceId || !token) {
       throw new BadRequestError('Z-API credentials missing')
     }
 
-    $http.send({
-      url: `https://api.z-api.io/instances/${instanceId}/token/${token}/disconnect`,
-      method: 'GET',
-    })
+    try {
+      $http.send({
+        url: `https://api.z-api.io/instances/${instanceId}/token/${token}/disconnect`,
+        method: 'GET',
+      })
+    } catch (err) {
+      // Ignored if it fails to disconnect via network
+    }
 
     const userId = e.auth?.id
     if (userId) {

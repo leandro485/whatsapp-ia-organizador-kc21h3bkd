@@ -142,7 +142,7 @@ export default function Settings() {
     setQrErrorMessage('')
     setQrTimeLeft(QR_LIFESPAN)
     try {
-      if (isRetry && waConnected) {
+      if (isRetry) {
         // Clear any stale session on the backend before generating a new QR
         await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' }).catch(() => {})
       }
@@ -156,9 +156,16 @@ export default function Settings() {
     } catch (e: any) {
       setQrStatus('error')
       const msg = getErrorMessage(e)
-      setQrErrorMessage(
-        msg || 'Falha ao obter QR Code válido do Gateway. Verifique sua conexão e tente novamente.',
-      )
+      if (msg.includes('ZAPI_400') || msg.includes('400')) {
+        setQrErrorMessage(
+          'A instância pode estar ocupada ou as credenciais estão incorretas. Tente limpar a sessão.',
+        )
+      } else {
+        setQrErrorMessage(
+          msg ||
+            'Falha ao obter QR Code válido do Gateway. Verifique sua conexão e tente novamente.',
+        )
+      }
     }
   }, [])
 
@@ -206,7 +213,7 @@ export default function Settings() {
 
   const handleConnectClick = () => {
     setIsQRDialogOpen(true)
-    generateQR(true) // Force fresh session initialization
+    generateQR(false)
   }
 
   const handleAddCategory = () => {
