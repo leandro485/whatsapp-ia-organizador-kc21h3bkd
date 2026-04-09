@@ -10,7 +10,7 @@ routerAdd(
     }
 
     const res = $http.send({
-      url: `https://api.z-api.io/instances/${instanceId}/token/${token}/qr-code`,
+      url: 'https://api.z-api.io/instances/' + instanceId + '/token/' + token + '/qr-code',
       method: 'GET',
     })
 

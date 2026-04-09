@@ -11,14 +11,14 @@ routerAdd(
 
     try {
       $http.send({
-        url: `https://api.z-api.io/instances/${instanceId}/token/${token}/disconnect`,
+        url: 'https://api.z-api.io/instances/' + instanceId + '/token/' + token + '/disconnect',
         method: 'GET',
       })
     } catch (err) {
       // Ignored if it fails to disconnect via network
     }
 
-    const userId = e.auth?.id
+    const userId = e.auth ? e.auth.id : null
     if (userId) {
       try {
         const settings = $app.findFirstRecordByData('user_settings', 'user', userId)
