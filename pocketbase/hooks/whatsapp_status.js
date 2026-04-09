@@ -5,8 +5,9 @@ routerAdd(
     const instanceId = ($secrets.get('ZAPI_INSTANCE_ID') || '').trim()
     const token = ($secrets.get('ZAPI_TOKEN') || '').trim()
 
+    const userId = e.auth ? e.auth.id : null
+
     if (!instanceId || !token) {
-      const userId = e.auth ? e.auth.id : null
       if (userId) {
         try {
           const settings = $app.findFirstRecordByData('user_settings', 'user', userId)
@@ -16,19 +17,36 @@ routerAdd(
           }
         } catch (err) {}
       }
-      throw new BadRequestError('your client-token or instance-id is not configured')
+      return e.json(200, { connected: false, status: 'unconfigured' })
     }
 
-    const res = $http.send({
-      url: `https://api.z-api.io/instances/${instanceId}/token/${token}/status`,
-      method: 'GET',
-    })
+    let res
+    try {
+      res = $http.send({
+        url: `https://api.z-api.io/instances/${instanceId}/token/${token}/status`,
+        method: 'GET',
+      })
+    } catch (err) {
+      if (userId) {
+        try {
+          const settings = $app.findFirstRecordByData('user_settings', 'user', userId)
+          if (settings.get('whatsapp_connected') !== false) {
+            settings.set('whatsapp_connected', false)
+            $app.save(settings)
+          }
+        } catch (err2) {}
+      }
+      return e.json(200, {
+        connected: false,
+        status: 'error',
+        error: err.message || 'Network error',
+      })
+    }
 
     const data = res.json || {}
     const isConnected =
       res.statusCode === 200 ? data.connected || data.status === 'CONNECTED' : false
 
-    const userId = e.auth ? e.auth.id : null
     if (userId) {
       try {
         const settings = $app.findFirstRecordByData('user_settings', 'user', userId)
@@ -42,7 +60,12 @@ routerAdd(
     }
 
     if (res.statusCode !== 200) {
-      throw new BadRequestError('Falha ao obter status do Z-API: ' + res.statusCode)
+      return e.json(200, {
+        connected: false,
+        status: 'error',
+        error: 'Falha ao obter status do Z-API: ' + res.statusCode,
+        details: data,
+      })
     }
 
     return e.json(200, data)

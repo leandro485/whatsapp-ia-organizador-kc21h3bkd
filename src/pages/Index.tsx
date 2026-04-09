@@ -69,15 +69,21 @@ export default function Index() {
         }
 
         try {
-          await pb.send('/backend/v1/whatsapp/status', { method: 'GET' })
-          setConfigError(false)
-        } catch (err: any) {
-          if (
-            err.message?.includes('Configuração da Z-API ausente') ||
-            err.message?.includes('token de cliente não está configurado')
-          ) {
+          const statusRes = await pb.send('/backend/v1/whatsapp/status', { method: 'GET' })
+          if (statusRes.status === 'unconfigured' || statusRes.status === 'error') {
             setConfigError(true)
+            setWaConnected(false)
+          } else if (statusRes.connected === false) {
+            setConfigError(false)
+            setWaConnected(false)
+          } else {
+            setConfigError(false)
+            setWaConnected(true)
           }
+        } catch (err) {
+          console.error('Failed to get WhatsApp status:', err)
+          setConfigError(true)
+          setWaConnected(false)
         }
       }
 
@@ -223,9 +229,11 @@ export default function Index() {
       {configError && (
         <Alert variant="destructive" className="mb-2">
           <ShieldAlert className="h-4 w-4" />
-          <AlertTitle>Configuração Ausente</AlertTitle>
+          <AlertTitle>Conexão Necessária</AlertTitle>
           <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <span>Configure suas chaves Z-API nas Secrets do projeto para continuar.</span>
+            <span>
+              Configure e valide suas chaves Z-API nas configurações para conectar o WhatsApp.
+            </span>
             <Button
               variant="outline"
               size="sm"
