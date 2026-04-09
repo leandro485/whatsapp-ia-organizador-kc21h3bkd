@@ -51,6 +51,7 @@ import { updateUserSettings, ensureUserSettings } from '@/services/settings'
 import { useRealtime } from '@/hooks/use-realtime'
 import pb from '@/lib/pocketbase/client'
 import { extractFieldErrors, getErrorMessage } from '@/lib/pocketbase/errors'
+import { cn } from '@/lib/utils'
 
 const QR_LIFESPAN = 45
 
@@ -65,6 +66,7 @@ export default function Settings() {
   const [waConnected, setWaConnected] = useState(false)
   const [waPhoneNumber] = useState<string | null>('+55 11 99999-9999')
   const [lastSync, setLastSync] = useState<string | null>(null)
+  const [configError, setConfigError] = useState(false)
   const [categories, setCategories] = useState<string[]>([])
   const [aiAggressiveness, setAiAggressiveness] = useState(50)
   const [remindersEnabled, setRemindersEnabled] = useState(false)
@@ -82,6 +84,20 @@ export default function Settings() {
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
 
+  const checkStatus = useCallback(async () => {
+    try {
+      await pb.send('/backend/v1/whatsapp/status', { method: 'GET' })
+      setConfigError(false)
+    } catch (err: any) {
+      if (
+        err.message?.includes('Configuração da Z-API ausente') ||
+        err.message?.includes('token de cliente não está configurado')
+      ) {
+        setConfigError(true)
+      }
+    }
+  }, [])
+
   const loadSettings = useCallback(async () => {
     if (!user) return
     try {
@@ -94,10 +110,11 @@ export default function Settings() {
         setRemindersEnabled(settings.reminders_enabled || false)
         setReminderLeadTime(settings.reminder_lead_time ?? 15)
       }
+      await checkStatus()
     } catch (error) {
       console.error('Failed to load settings', error)
     }
-  }, [user])
+  }, [user, checkStatus])
 
   useEffect(() => {
     loadSettings()
@@ -215,6 +232,15 @@ export default function Settings() {
   }
 
   const handleConnectClick = () => {
+    if (configError) {
+      toast({
+        variant: 'destructive',
+        title: 'Configuração Ausente',
+        description:
+          'Token de cliente não configurado. Verifique as Secrets no painel de integração.',
+      })
+      return
+    }
     setIsQRDialogOpen(true)
     generateQR(false)
   }
@@ -258,9 +284,16 @@ export default function Settings() {
     if (!settingsId) return
     setIsDisconnecting(true)
     try {
-      await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' })
+      const res = await pb.send('/backend/v1/whatsapp/disconnect', { method: 'POST' })
       setLastSync(null)
-      toast({ title: 'Desconectado', description: 'Sessão do WhatsApp encerrada e dados limpos.' })
+      if (res?.message?.includes('Sessão limpa localmente')) {
+        toast({ title: 'Desconectado', description: res.message })
+      } else {
+        toast({
+          title: 'Desconectado',
+          description: 'Sessão do WhatsApp encerrada e dados limpos.',
+        })
+      }
     } catch (err) {
       toast({ title: 'Erro', description: 'Falha ao desvincular.', variant: 'destructive' })
     } finally {
@@ -331,10 +364,25 @@ export default function Settings() {
         </TabsList>
 
         <TabsContent value="general" className="space-y-4">
-          <Card>
+          {configError && (
+            <Alert variant="destructive">
+              <ShieldAlert className="h-4 w-4" />
+              <AlertTitle>Faltam Credenciais Z-API</AlertTitle>
+              <AlertDescription>
+                As variáveis <strong>ZAPI_INSTANCE_ID</strong> e <strong>ZAPI_TOKEN</strong> não
+                foram encontradas nas Secrets. A integração com WhatsApp não funcionará.
+              </AlertDescription>
+            </Alert>
+          )}
+          <Card className={cn(configError && 'border-destructive/50')}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Smartphone className="w-5 h-5 text-primary" /> Conexão WhatsApp
+                {configError && (
+                  <Badge variant="destructive" className="ml-2 text-[10px] uppercase font-bold">
+                    Não Configurado
+                  </Badge>
+                )}
               </CardTitle>
               <CardDescription>
                 Gerencie a conexão da sua conta e sincronização do Gateway.

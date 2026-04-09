@@ -7,7 +7,7 @@ routerAdd(
 
     if (!instanceId || !token) {
       throw new BadRequestError(
-        'Credenciais do Z-API não configuradas (ZAPI_INSTANCE_ID ou ZAPI_TOKEN).',
+        'Configuração da Z-API ausente. Erro: seu token de cliente não está configurado.',
       )
     }
 

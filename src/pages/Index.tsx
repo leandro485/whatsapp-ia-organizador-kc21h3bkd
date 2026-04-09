@@ -30,10 +30,14 @@ import {
   Filter,
   Pin,
   Sparkles,
+  ShieldAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { updateChatPinned } from '@/services/chats'
+import pb from '@/lib/pocketbase/client'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Link } from 'react-router-dom'
 
 export default function Index() {
   const [tasks, setTasks] = useState<any[]>([])
@@ -48,6 +52,7 @@ export default function Index() {
   const { user } = useAuth()
 
   const [waConnected, setWaConnected] = useState(false)
+  const [configError, setConfigError] = useState(false)
 
   const loadData = async () => {
     try {
@@ -61,6 +66,18 @@ export default function Index() {
           }
         } catch (err) {
           console.error('Error ensuring settings:', err)
+        }
+
+        try {
+          await pb.send('/backend/v1/whatsapp/status', { method: 'GET' })
+          setConfigError(false)
+        } catch (err: any) {
+          if (
+            err.message?.includes('Configuração da Z-API ausente') ||
+            err.message?.includes('token de cliente não está configurado')
+          ) {
+            setConfigError(true)
+          }
         }
       }
 
@@ -203,6 +220,23 @@ export default function Index() {
 
   return (
     <div className="flex flex-col gap-6 h-full pb-8">
+      {configError && (
+        <Alert variant="destructive" className="mb-2">
+          <ShieldAlert className="h-4 w-4" />
+          <AlertTitle>Configuração Ausente</AlertTitle>
+          <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <span>Configure suas chaves Z-API nas Secrets do projeto para continuar.</span>
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="shrink-0 bg-transparent hover:bg-destructive/10 text-destructive border-destructive"
+            >
+              <Link to="/settings">Ir para Configurações</Link>
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-3">

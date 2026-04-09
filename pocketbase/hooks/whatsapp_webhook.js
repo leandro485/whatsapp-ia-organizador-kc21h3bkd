@@ -1,4 +1,12 @@
 routerAdd('POST', '/backend/v1/webhook/whatsapp', (e) => {
+  const instanceId = ($secrets.get('ZAPI_INSTANCE_ID') || '').trim()
+  const token = ($secrets.get('ZAPI_TOKEN') || '').trim()
+  if (!instanceId || !token) {
+    return e.json(400, {
+      error: 'Configuração da Z-API ausente. Erro: seu token de cliente não está configurado.',
+    })
+  }
+
   const body = e.requestInfo().body
   const userId = body.userId
   const contactName = body.contactName

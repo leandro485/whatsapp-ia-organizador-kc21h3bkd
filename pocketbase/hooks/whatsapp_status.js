@@ -6,8 +6,18 @@ routerAdd(
     const token = ($secrets.get('ZAPI_TOKEN') || '').trim()
 
     if (!instanceId || !token) {
+      const userId = e.auth ? e.auth.id : null
+      if (userId) {
+        try {
+          const settings = $app.findFirstRecordByData('user_settings', 'user', userId)
+          if (settings.get('whatsapp_connected') !== false) {
+            settings.set('whatsapp_connected', false)
+            $app.save(settings)
+          }
+        } catch (err) {}
+      }
       throw new BadRequestError(
-        'Credenciais do Z-API não configuradas (ZAPI_INSTANCE_ID ou ZAPI_TOKEN).',
+        'Configuração da Z-API ausente. Erro: seu token de cliente não está configurado.',
       )
     }
 
@@ -16,12 +26,9 @@ routerAdd(
       method: 'GET',
     })
 
-    if (res.statusCode !== 200) {
-      throw new BadRequestError('Falha ao obter status do Z-API: ' + res.statusCode)
-    }
-
     const data = res.json || {}
-    const isConnected = data.connected || data.status === 'CONNECTED'
+    const isConnected =
+      res.statusCode === 200 ? data.connected || data.status === 'CONNECTED' : false
 
     const userId = e.auth ? e.auth.id : null
     if (userId) {
@@ -34,6 +41,10 @@ routerAdd(
       } catch (err) {
         // Ignored
       }
+    }
+
+    if (res.statusCode !== 200) {
+      throw new BadRequestError('Falha ao obter status do Z-API: ' + res.statusCode)
     }
 
     return e.json(200, data)
