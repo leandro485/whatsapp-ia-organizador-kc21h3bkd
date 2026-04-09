@@ -10,7 +10,7 @@ migrate(
       collection.fields.add(new NumberField({ name: 'reminder_lead_time' }))
     }
 
-    collection.addIndex('CREATE UNIQUE INDEX idx_user_settings_user ON user_settings (user)')
+    collection.addIndex('idx_user_settings_user', true, 'user', '')
 
     app.save(collection)
   },

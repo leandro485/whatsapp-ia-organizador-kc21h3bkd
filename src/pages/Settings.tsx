@@ -47,9 +47,10 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
-import { getUserSettings, updateUserSettings, createUserSettings } from '@/services/settings'
+import { updateUserSettings, ensureUserSettings } from '@/services/settings'
 import { useRealtime } from '@/hooks/use-realtime'
 import pb from '@/lib/pocketbase/client'
+import { extractFieldErrors, getErrorMessage } from '@/lib/pocketbase/errors'
 
 const QR_LIFESPAN = 45
 
@@ -60,6 +61,7 @@ export default function Settings() {
   const { user } = useAuth()
 
   const [settingsId, setSettingsId] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [waConnected, setWaConnected] = useState(false)
   const [waPhoneNumber] = useState<string | null>('+55 11 99999-9999')
   const [lastSync, setLastSync] = useState<string | null>(null)
@@ -83,21 +85,15 @@ export default function Settings() {
   const loadSettings = useCallback(async () => {
     if (!user) return
     try {
-      let settings = await getUserSettings(user.id)
-      if (!settings) {
-        settings = await createUserSettings({
-          user: user.id,
-          whatsapp_connected: false,
-          ai_aggressiveness: 50,
-          categories: ['Geral', 'Trabalho', 'Pessoal'],
-        })
+      const settings = await ensureUserSettings(user.id)
+      if (settings) {
+        setSettingsId(settings.id !== 'local-default' ? settings.id : null)
+        setWaConnected(settings.whatsapp_connected || false)
+        setAiAggressiveness(settings.ai_aggressiveness ?? 50)
+        setCategories(settings.categories || ['Geral', 'Trabalho', 'Pessoal'])
+        setRemindersEnabled(settings.reminders_enabled || false)
+        setReminderLeadTime(settings.reminder_lead_time ?? 15)
       }
-      setSettingsId(settings.id)
-      setWaConnected(settings.whatsapp_connected || false)
-      setAiAggressiveness(settings.ai_aggressiveness ?? 50)
-      setCategories(settings.categories || ['Geral', 'Trabalho', 'Pessoal'])
-      setRemindersEnabled(settings.reminders_enabled || false)
-      setReminderLeadTime(settings.reminder_lead_time ?? 15)
     } catch (error) {
       console.error('Failed to load settings', error)
     }
@@ -248,6 +244,7 @@ export default function Settings() {
 
   const handleSaveSettings = async () => {
     if (!settingsId) return
+    setFieldErrors({})
     try {
       await updateUserSettings(settingsId, {
         ai_aggressiveness: aiAggressiveness,
@@ -260,7 +257,21 @@ export default function Settings() {
         description: 'Suas configurações foram atualizadas.',
       })
     } catch (err) {
-      toast({ title: 'Erro', description: 'Falha ao salvar.', variant: 'destructive' })
+      const extractedErrors = extractFieldErrors(err)
+      if (Object.keys(extractedErrors).length > 0) {
+        setFieldErrors(extractedErrors)
+        toast({
+          title: 'Erro de validação',
+          description: 'Verifique os campos destacados.',
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Erro',
+          description: getErrorMessage(err) || 'Falha ao salvar.',
+          variant: 'destructive',
+        })
+      }
     }
   }
 
@@ -427,16 +438,21 @@ export default function Settings() {
                   </Badge>
                 ))}
               </div>
-              <div className="flex gap-2 max-w-sm pt-2">
-                <Input
-                  placeholder="Nova categoria..."
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
-                />
-                <Button variant="secondary" onClick={handleAddCategory}>
-                  <Plus className="w-4 h-4 mr-2" /> Add
-                </Button>
+              <div className="flex flex-col gap-2 max-w-sm pt-2">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Nova categoria..."
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                  />
+                  <Button variant="secondary" onClick={handleAddCategory}>
+                    <Plus className="w-4 h-4 mr-2" /> Add
+                  </Button>
+                </div>
+                {fieldErrors.categories && (
+                  <p className="text-sm text-destructive">{fieldErrors.categories}</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -459,6 +475,9 @@ export default function Settings() {
                   step={1}
                   className="w-full"
                 />
+                {fieldErrors.ai_aggressiveness && (
+                  <p className="text-sm text-destructive">{fieldErrors.ai_aggressiveness}</p>
+                )}
               </div>
               <Separator />
               <div className="flex items-center justify-between">
@@ -498,14 +517,19 @@ export default function Settings() {
                 <Switch defaultChecked />
               </div>
               <Separator />
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label className="text-base">Lembretes via WhatsApp</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Receba alertas antes do vencimento das tarefas
-                  </p>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Lembretes via WhatsApp</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Receba alertas antes do vencimento das tarefas
+                    </p>
+                  </div>
+                  <Switch checked={remindersEnabled} onCheckedChange={setRemindersEnabled} />
                 </div>
-                <Switch checked={remindersEnabled} onCheckedChange={setRemindersEnabled} />
+                {fieldErrors.reminders_enabled && (
+                  <p className="text-sm text-destructive">{fieldErrors.reminders_enabled}</p>
+                )}
               </div>
               <div className="space-y-4">
                 <div className="space-y-0.5">
@@ -522,6 +546,9 @@ export default function Settings() {
                   className="w-full"
                   disabled={!remindersEnabled}
                 />
+                {fieldErrors.reminder_lead_time && (
+                  <p className="text-sm text-destructive">{fieldErrors.reminder_lead_time}</p>
+                )}
               </div>
             </CardContent>
           </Card>
