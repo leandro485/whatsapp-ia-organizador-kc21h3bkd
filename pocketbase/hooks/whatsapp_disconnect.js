@@ -20,10 +20,7 @@ routerAdd(
 
     if (!instanceId || !token) {
       disconnectLocal()
-      return e.json(200, {
-        success: true,
-        message: 'Sessão limpa localmente. Configuração da Z-API ausente.',
-      })
+      throw new BadRequestError('your client-token or instance-id is not configured')
     }
 
     let externalSuccess = true

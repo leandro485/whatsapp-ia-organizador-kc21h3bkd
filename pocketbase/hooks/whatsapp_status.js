@@ -16,9 +16,7 @@ routerAdd(
           }
         } catch (err) {}
       }
-      throw new BadRequestError(
-        'Configuração da Z-API ausente. Erro: seu token de cliente não está configurado.',
-      )
+      throw new BadRequestError('your client-token or instance-id is not configured')
     }
 
     const res = $http.send({

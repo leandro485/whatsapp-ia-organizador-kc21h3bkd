@@ -91,9 +91,12 @@ export default function Settings() {
     } catch (err: any) {
       if (
         err.message?.includes('Configuração da Z-API ausente') ||
-        err.message?.includes('token de cliente não está configurado')
+        err.message?.includes('token de cliente não está configurado') ||
+        err.message?.includes('your client-token or instance-id is not configured')
       ) {
         setConfigError(true)
+      } else {
+        setConfigError(false)
       }
     }
   }, [])
@@ -173,10 +176,18 @@ export default function Settings() {
     } catch (e: any) {
       setQrStatus('error')
       const msg = getErrorMessage(e)
-      if (msg.includes('Credenciais do Z-API não configuradas')) {
-        setQrErrorMessage(
-          'Credenciais Z-API (ZAPI_INSTANCE_ID e ZAPI_TOKEN) não configuradas no painel de Secrets.',
-        )
+      if (
+        msg.includes('Credenciais do Z-API não configuradas') ||
+        msg.includes('your client-token or instance-id is not configured')
+      ) {
+        const errorText =
+          'Erro: seu token de cliente não está configurado. Verifique as Secrets no painel do Skip Cloud.'
+        setQrErrorMessage(errorText)
+        toast({
+          variant: 'destructive',
+          title: 'Configuração Ausente',
+          description: errorText,
+        })
       } else if (msg.includes('400') || msg.includes('ZAPI_400') || msg.includes('ocupada')) {
         setQrErrorMessage(
           `Erro no Gateway Z-API: ${msg}. A instância pode estar ocupada ou as credenciais estão incorretas. Tente limpar a sessão.`,
@@ -237,7 +248,7 @@ export default function Settings() {
         variant: 'destructive',
         title: 'Configuração Ausente',
         description:
-          'Token de cliente não configurado. Verifique as Secrets no painel de integração.',
+          'Erro: seu token de cliente não está configurado. Verifique as Secrets no painel do Skip Cloud.',
       })
       return
     }
@@ -294,8 +305,20 @@ export default function Settings() {
           description: 'Sessão do WhatsApp encerrada e dados limpos.',
         })
       }
-    } catch (err) {
-      toast({ title: 'Erro', description: 'Falha ao desvincular.', variant: 'destructive' })
+    } catch (err: any) {
+      const msg = getErrorMessage(err)
+      if (msg.includes('your client-token or instance-id is not configured')) {
+        toast({
+          title: 'Configuração Ausente',
+          description:
+            'Erro: seu token de cliente não está configurado. Verifique as Secrets no painel do Skip Cloud.',
+          variant: 'destructive',
+        })
+        setLastSync(null)
+        setWaConnected(false)
+      } else {
+        toast({ title: 'Erro', description: 'Falha ao desvincular.', variant: 'destructive' })
+      }
     } finally {
       setIsDisconnecting(false)
       setShowDisconnectConfirm(false)
@@ -378,9 +401,16 @@ export default function Settings() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Smartphone className="w-5 h-5 text-primary" /> Conexão WhatsApp
-                {configError && (
+                {configError ? (
                   <Badge variant="destructive" className="ml-2 text-[10px] uppercase font-bold">
-                    Não Configurado
+                    Credentials Missing
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="default"
+                    className="ml-2 bg-green-500 hover:bg-green-600 text-[10px] uppercase font-bold text-white"
+                  >
+                    Credentials Loaded
                   </Badge>
                 )}
               </CardTitle>
