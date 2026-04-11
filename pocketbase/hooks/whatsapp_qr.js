@@ -7,8 +7,8 @@ routerAdd(
 
     if (!instanceId || !token) {
       return e.json(400, {
-        error: 'CREDENTIALS_MISSING',
-        message: 'As credenciais ZAPI_TOKEN e ZAPI_INSTANCE_ID não foram encontradas nos Secrets.',
+        status: 400,
+        message: 'Instance ID or Token not configured',
       })
     }
 

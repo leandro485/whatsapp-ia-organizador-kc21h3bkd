@@ -91,6 +91,9 @@ export default function Settings() {
     } catch (err: any) {
       if (
         err.response?.error === 'CREDENTIALS_MISSING' ||
+        err.response?.message === 'Instance ID or Token not configured' ||
+        err.message?.includes('Instance ID or Token not configured') ||
+        err.message?.includes('Instance not found') ||
         err.message?.includes('Configuração da Z-API ausente') ||
         err.message?.includes('token de cliente não está configurado') ||
         err.message?.includes('your client-token or instance-id is not configured')
@@ -179,10 +182,13 @@ export default function Settings() {
       const msg = getErrorMessage(e)
       if (
         msg.includes('Credenciais do Z-API não configuradas') ||
-        msg.includes('your client-token or instance-id is not configured')
+        msg.includes('your client-token or instance-id is not configured') ||
+        e.response?.message === 'Instance ID or Token not configured' ||
+        msg.includes('Instance ID or Token not configured') ||
+        msg.includes('Instance not found')
       ) {
         const errorText =
-          'Erro: seu token de cliente não está configurado. Verifique as Secrets no painel do Skip Cloud.'
+          'Por favor, configure ZAPI_INSTANCE_ID e ZAPI_TOKEN no painel de Secrets (Skip Cloud).'
         setQrErrorMessage(errorText)
         toast({
           variant: 'destructive',
@@ -310,12 +316,15 @@ export default function Settings() {
       const msg = getErrorMessage(err)
       if (
         err.response?.error === 'CREDENTIALS_MISSING' ||
+        err.response?.message === 'Instance ID or Token not configured' ||
+        msg.includes('Instance ID or Token not configured') ||
+        msg.includes('Instance not found') ||
         msg.includes('your client-token or instance-id is not configured')
       ) {
         toast({
           title: 'Configuração Ausente',
           description:
-            'Erro: seu token de cliente não está configurado. Verifique as Secrets no painel do Skip Cloud.',
+            'Por favor, configure ZAPI_INSTANCE_ID e ZAPI_TOKEN no painel de Secrets (Skip Cloud).',
           variant: 'destructive',
         })
         setLastSync(null)
