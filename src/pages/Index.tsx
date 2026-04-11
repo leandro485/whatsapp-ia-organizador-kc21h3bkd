@@ -31,6 +31,12 @@ import {
   Pin,
   Sparkles,
   ShieldAlert,
+  Server,
+  Wifi,
+  WifiOff,
+  Settings2,
+  Activity,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
@@ -53,6 +59,8 @@ export default function Index() {
 
   const [waConnected, setWaConnected] = useState(false)
   const [configError, setConfigError] = useState(false)
+  const [aiAggressiveness, setAiAggressiveness] = useState(50)
+  const [isTestingApi, setIsTestingApi] = useState(false)
 
   const loadData = async () => {
     try {
@@ -63,6 +71,7 @@ export default function Index() {
           const settings = await ensureUserSettings(user.id)
           if (settings) {
             setWaConnected(settings.whatsapp_connected || false)
+            setAiAggressiveness(settings.ai_aggressiveness ?? 50)
           }
         } catch (err) {
           console.error('Error ensuring settings:', err)
@@ -137,10 +146,56 @@ export default function Index() {
     (e) => {
       if (user && e.record.user === user.id) {
         setWaConnected(e.record.whatsapp_connected || false)
+        setAiAggressiveness(e.record.ai_aggressiveness ?? 50)
       }
     },
     !!user,
   )
+
+  const handleTestConnection = async () => {
+    setIsTestingApi(true)
+    try {
+      const statusRes = await pb.send('/backend/v1/whatsapp/status', { method: 'GET' })
+      if (statusRes.status === 'error' || statusRes.connected === false) {
+        setConfigError(statusRes.status === 'error')
+        setWaConnected(false)
+        toast({
+          variant: 'destructive',
+          title: 'Falha na conexão com a API',
+          description:
+            statusRes.status === 'error'
+              ? 'Verifique suas credenciais na configuração.'
+              : 'WhatsApp desconectado.',
+        })
+      } else {
+        setConfigError(false)
+        setWaConnected(true)
+        toast({
+          title: 'Conexão estabelecida com sucesso',
+          description: 'A API do WhatsApp está respondendo corretamente.',
+        })
+      }
+    } catch (err: any) {
+      if (err.response?.error === 'CREDENTIALS_MISSING') {
+        setConfigError(true)
+        toast({
+          variant: 'destructive',
+          title: 'Credenciais Ausentes',
+          description: 'Configure ZAPI_INSTANCE_ID e ZAPI_TOKEN no painel da Skip Cloud.',
+        })
+      } else {
+        setConfigError(false)
+        toast({
+          variant: 'destructive',
+          title: 'Erro de Conexão',
+          description: 'Não foi possível contatar a API.',
+        })
+      }
+      setWaConnected(false)
+    } finally {
+      setIsTestingApi(false)
+    }
+  }
 
   const handleTogglePin = async (chat: any) => {
     try {
@@ -277,60 +332,132 @@ export default function Index() {
         </div>
       </div>
 
-      <Card className="col-span-1 md:col-span-3 shadow-sm border-primary/20 bg-primary/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2 text-primary">
-            <Sparkles className="w-5 h-5" />
-            Resumo da Semana
-          </CardTitle>
-          <CardDescription>
-            Um resumo rápido (TL;DR) das suas atividades nos últimos 7 dias.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <ListTodo className="w-4 h-4 text-muted-foreground" /> Principais Tarefas
-              </h3>
-              {recentTasks.length > 0 ? (
-                <ul className="space-y-2">
-                  {recentTasks.map((t) => (
-                    <li key={t.id} className="text-sm text-muted-foreground flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
-                      <span className="line-clamp-2">{t.title}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground/70">Nenhuma tarefa recente.</p>
-              )}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="col-span-1 shadow-sm border-muted flex flex-col">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Server className="w-5 h-5 text-primary" />
+              Status do Sistema
+            </CardTitle>
+            <CardDescription>Conexão e configurações da IA</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6 flex-1 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {waConnected ? (
+                    <Wifi className="w-4 h-4 text-green-500" />
+                  ) : (
+                    <WifiOff className="w-4 h-4 text-destructive" />
+                  )}
+                  <span className="text-sm font-medium">WhatsApp API</span>
+                </div>
+                <Badge
+                  variant={waConnected ? 'default' : 'destructive'}
+                  className={waConnected ? 'bg-green-500 hover:bg-green-600 text-white' : ''}
+                >
+                  {waConnected ? 'Conectado' : 'Desconectado'}
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2 text-muted-foreground">
+                    <Settings2 className="w-4 h-4" /> Agressividade da IA
+                  </span>
+                  <span className="font-medium">{aiAggressiveness}%</span>
+                </div>
+                <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-500"
+                    style={{ width: `${aiAggressiveness}%` }}
+                  />
+                </div>
+              </div>
             </div>
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-muted-foreground" /> Destaques de Conversas
-              </h3>
-              {recentChatsWithSummary.length > 0 ? (
-                <ul className="space-y-2">
-                  {recentChatsWithSummary.map((c) => (
-                    <li key={c.id} className="text-sm text-muted-foreground flex items-start gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
-                      <span className="line-clamp-2">
-                        <strong className="font-medium text-foreground">{c.name}:</strong>{' '}
-                        {c.summary}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+
+            <Button
+              variant="outline"
+              className="w-full mt-4"
+              onClick={handleTestConnection}
+              disabled={isTestingApi}
+            >
+              {isTestingApi ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Testando...
+                </>
               ) : (
-                <p className="text-sm text-muted-foreground/70">
-                  Nenhum resumo de conversa recente.
-                </p>
+                <>
+                  <Activity className="w-4 h-4 mr-2" />
+                  Testar Conexão
+                </>
               )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="col-span-1 md:col-span-2 shadow-sm border-primary/20 bg-primary/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2 text-primary">
+              <Sparkles className="w-5 h-5" />
+              Resumo da Semana
+            </CardTitle>
+            <CardDescription>
+              Um resumo rápido (TL;DR) das suas atividades nos últimos 7 dias.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <ListTodo className="w-4 h-4 text-muted-foreground" /> Principais Tarefas
+                </h3>
+                {recentTasks.length > 0 ? (
+                  <ul className="space-y-2">
+                    {recentTasks.map((t) => (
+                      <li
+                        key={t.id}
+                        className="text-sm text-muted-foreground flex items-start gap-2"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
+                        <span className="line-clamp-2">{t.title}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground/70">Nenhuma tarefa recente.</p>
+                )}
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-muted-foreground" /> Destaques de Conversas
+                </h3>
+                {recentChatsWithSummary.length > 0 ? (
+                  <ul className="space-y-2">
+                    {recentChatsWithSummary.map((c) => (
+                      <li
+                        key={c.id}
+                        className="text-sm text-muted-foreground flex items-start gap-2"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
+                        <span className="line-clamp-2">
+                          <strong className="font-medium text-foreground">{c.name}:</strong>{' '}
+                          {c.summary}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground/70">
+                    Nenhum resumo de conversa recente.
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card className="col-span-1 md:col-span-3 shadow-sm border-muted">
         <CardHeader className="pb-4">
